@@ -1,4 +1,5 @@
 -- made by Itsxmanh-BlockVN
+print("helo")
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
@@ -259,3 +260,4 @@ RS.RenderStepped:Connect(function()
 		stroke.Color=rainbow
 	end
 end)
+ 
