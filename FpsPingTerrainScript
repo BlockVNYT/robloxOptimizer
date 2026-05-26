@@ -1,4 +1,14 @@
-local RS,plr,gui=game:GetService("RunService"),game.Players.LocalPlayer,Instance.new("ScreenGui",game.Players.LocalPlayer.PlayerGui)
+local RS=game:GetService("RunService")
+local Stats=game:GetService("Stats")
+local Lighting=game:GetService("Lighting")
+local plr=game.Players.LocalPlayer
+
+-- tối ưu thêm
+settings().Rendering.QualityLevel=Enum.QualityLevel.Level01
+Lighting.GlobalShadows=false
+Lighting.FogEnd=9e9
+
+local gui=Instance.new("ScreenGui",plr.PlayerGui)
 gui.IgnoreGuiInset=true
 
 -- FPS/PING
@@ -25,7 +35,7 @@ for _,v in ipairs({
 	table.insert(o,x)
 end
 
--- NÚT GIẢM LAG
+-- nút giảm lag
 local b=Instance.new("TextButton",gui)
 b.Size=UDim2.new(0,200,0,35)
 b.Position=UDim2.new(0.5,-100,0,35)
@@ -70,21 +80,28 @@ b.MouseButton1Click:Connect(function()
 	end
 end)
 
--- FPS update
-local t,f=tick(),0
+-- update FPS/PING
+local fps,last,frames=0,tick(),0
+
 RS.RenderStepped:Connect(function()
-	f+=1
-	if tick()-t>=1 then
-		local fps=f/(tick()-t)
-		t,f=tick(),0
-		local ping=math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+	frames+=1
+	local now=tick()
+
+	if now-last>=0.25 then
+		fps=math.floor(frames/(now-last))
+		frames=0
+		last=now
+
+		local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+		local ping=tonumber(pingStr:match("%d+")) or 0
+
 		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
 		for _,x in ipairs(o) do
 			x.Text=l.Text
 		end
 	end
 
-	local s=tick()*2
+	local s=now*2
 	l.TextColor3=Color3.new(
 		math.sin(s)*.5+.5,
 		math.sin(s+2)*.5+.5,
