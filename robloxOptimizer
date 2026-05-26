@@ -1,4 +1,3 @@
-
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
@@ -120,7 +119,7 @@ terrainBtn.Text="Remove Terrain: OFF"
 terrainBtn.Visible=false
 addRainbowStroke(terrainBtn,2)
 
--- Less VFX sub-button (Thay thế cho Ultra FPS cũ)
+-- Less VFX sub-button
 local lessVfxBtn=Instance.new("TextButton")
 lessVfxBtn.Parent=gui
 lessVfxBtn.Size=UDim2.new(0,150,0,30)
@@ -233,7 +232,7 @@ addRainbowStroke(plusBtn,2)
 local note=Instance.new("TextLabel")
 note.Parent=gui
 note.Size=UDim2.new(0,320,0,30)
-note.Position=UDim2.new(0.5,-160,0,130)
+note.Position=UDim2.new(0.5,-160,0,165)
 note.BackgroundTransparency=1
 note.Text="Bấm Alt Trái / Left Alt để ẩn/hiện UI"
 note.TextScaled=false
@@ -249,11 +248,27 @@ local dragInput
 local dragStart
 local startPos
 
+-- Hop Server button
+local TeleportService=game:GetService("TeleportService")
+
+local hopBtn=Instance.new("TextButton")
+hopBtn.Parent=gui
+hopBtn.Size=UDim2.new(0,240,0,35)
+hopBtn.Position=UDim2.new(0.5,-120,0,125)
+hopBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+hopBtn.TextColor3=Color3.new(1,1,1)
+hopBtn.TextScaled=false
+hopBtn.TextSize=17
+hopBtn.Font=Enum.Font.SourceSansBold
+hopBtn.Text="Hop Server"
+addRainbowStroke(hopBtn,2)
+
 local draggableObjects={
 	l,b1,b2,
 	boostBtn,terrainBtn,lessVfxBtn,
 	brightModeBtn,offModeBtn,darkModeBtn,
 	minusBtn,effectAdjust,plusBtn,
+	hopBtn,
 	note
 }
 
@@ -299,14 +314,32 @@ task.delay(5,function()
 	note:Destroy()
 end)
 
--- Alt hide/show
+-- FIX #3: Alt hide/show - lưu trạng thái visible trước khi ẩn để restore đúng
 local uiVisible=true
 UIS.InputBegan:Connect(function(input,gpe)
 	if gpe then return end
 	if input.KeyCode==Enum.KeyCode.LeftAlt then
 		uiVisible=not uiVisible
-		for _,v in ipairs(gui:GetChildren()) do
-			if v~=note then v.Visible=uiVisible end
+		if uiVisible then
+			-- Restore: chỉ hiện các object thuộc nhóm draggable (luôn visible khi UI bật)
+			-- Sub-button giữ nguyên trạng thái expanded/collapsed
+			l.Visible=true
+			b1.Visible=true
+			b2.Visible=true
+			minusBtn.Visible=true
+			effectAdjust.Visible=true
+			plusBtn.Visible=true
+			hopBtn.Visible=true
+			boostBtn.Visible=lagExpanded
+			terrainBtn.Visible=lagExpanded
+			lessVfxBtn.Visible=lagExpanded
+			brightModeBtn.Visible=modeExpanded
+			offModeBtn.Visible=modeExpanded
+			darkModeBtn.Visible=modeExpanded
+		else
+			for _,v in ipairs(gui:GetChildren()) do
+				if v~=note then v.Visible=false end
+			end
 		end
 	end
 end)
@@ -317,7 +350,10 @@ plr.Idled:Connect(function()
 	VirtualUser:ClickButton2(Vector2.new())
 end)
 
-local saved={}
+-- FIX #1: Tách saved riêng cho từng hàm
+local savedBoost={}
+local savedTerrain={}
+
 local brightConn=nil
 
 local function updateEffectText()
@@ -343,7 +379,7 @@ local boostEnabled=false
 local terrainEnabled=false
 local lessVfxEnabled=false
 
--- ─── Less VFX (Cũ là Ultra FPS) ──────────────────────────────────────────────
+-- ─── Less VFX ────────────────────────────────────────────────────────────────
 local vfxSaved={}
 local vfxConn=nil
 
@@ -373,14 +409,16 @@ end
 local function applyVfxToObject(v)
 	if not lessVfxEnabled then return end
 
-	if isVFXType(v) and not v:IsDescendantOf(plr.Character or game) then
+	-- FIX #2: Kiểm tra plr.Character đúng cách, tránh fallback về game
+	local char=plr.Character
+	if isVFXType(v) and (not char or not v:IsDescendantOf(char)) then
 		if vfxSaved[v]==nil then
 			vfxSaved[v]=v.Enabled
 		end
 		v.Enabled=false
 
 	elseif isShadowCaster(v)
-		and not v:IsDescendantOf(plr.Character or game) then
+		and (not char or not v:IsDescendantOf(char)) then
 		if vfxSaved[v]==nil then
 			vfxSaved[v]=v.CastShadow
 		end
@@ -446,16 +484,15 @@ local function applyBoostFPS(state)
 	boostEnabled=state
 	boostBtn.Text=state and "Boost FPS: ON" or "Boost FPS: OFF"
 	boostBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
-	
-	-- Phần xử lý khử màu sắc của Terrain (Xám hóa toàn bộ vật liệu terrain)
+
 	local terrain = workspace:FindFirstChildOfClass("Terrain")
 	if terrain then
 		for _, mat in ipairs(Enum.Material:GetEnumItems()) do
 			pcall(function()
 				if state then
-					terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50)) -- Biến thành màu xám đồng nhất
+					terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50))
 				else
-					terrain:ResetMaterialColor(mat) -- Trả lại màu gốc khi Tắt Boost
+					terrain:ResetMaterialColor(mat)
 				end
 			end)
 		end
@@ -471,30 +508,31 @@ local function applyBoostFPS(state)
 			end
 		elseif v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
 			if state then
-				if not saved[v] then saved[v]=v.Material end
+				-- FIX #1: dùng savedBoost thay vì saved
+				if not savedBoost[v] then savedBoost[v]=v.Material end
 				v.Material=Enum.Material.SmoothPlastic
 				v.Reflectance=0
 			else
-				if saved[v] then v.Material=saved[v] end
+				if savedBoost[v] then v.Material=savedBoost[v] end
 			end
 		elseif v:IsA("Decal") or v:IsA("Texture") then
 			if state then
-				if not saved[v] then saved[v]=v.Transparency end
+				if not savedBoost[v] then savedBoost[v]=v.Transparency end
 				v.Transparency=1
 			else
-				if saved[v] then v.Transparency=saved[v] end
+				if savedBoost[v] then v.Transparency=savedBoost[v] end
 			end
 		elseif v:IsA("ParticleEmitter") or v:IsA("Trail")
 			or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
 			if state then
-				if not saved[v] then saved[v]=v.Enabled end
+				if not savedBoost[v] then savedBoost[v]=v.Enabled end
 				v.Enabled=false
 			else
-				if saved[v]~=nil then v.Enabled=saved[v] end
+				if savedBoost[v]~=nil then v.Enabled=savedBoost[v] end
 			end
 		end
 	end
-	if not state then saved = {} end
+	if not state then savedBoost={} end
 end
 
 local function applyRemoveTerrain(state)
@@ -504,21 +542,22 @@ local function applyRemoveTerrain(state)
 	for _,v in ipairs(workspace:GetDescendants()) do
 		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
 			if state then
-				if not saved[v] then saved[v]=v.LocalTransparencyModifier end
+				-- FIX #1: dùng savedTerrain thay vì saved
+				if not savedTerrain[v] then savedTerrain[v]=v.LocalTransparencyModifier end
 				v.LocalTransparencyModifier=1
 			else
-				if saved[v] then v.LocalTransparencyModifier=saved[v] end
+				if savedTerrain[v] then v.LocalTransparencyModifier=savedTerrain[v] end
 			end
 		elseif v:IsA("Decal") or v:IsA("Texture") then
 			if state then
-				if not saved[v] then saved[v]=v.Transparency end
+				if not savedTerrain[v] then savedTerrain[v]=v.Transparency end
 				v.Transparency=1
 			else
-				if saved[v] then v.Transparency=saved[v] end
+				if savedTerrain[v] then v.Transparency=savedTerrain[v] end
 			end
 		end
 	end
-	if not state then saved = {} end
+	if not state then savedTerrain={} end
 end
 
 local function applyBright(mode)
@@ -573,7 +612,40 @@ b1.MouseButton1Click:Connect(function()
 	lessVfxBtn.Visible=lagExpanded
 end)
 
-boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not boostEnabled) end)
+-- Hop Server logic
+local isHopping=false
+hopBtn.MouseButton1Click:Connect(function()
+	if isHopping then return end
+	isHopping=true
+	hopBtn.Text="Hopping..."
+	hopBtn.BackgroundColor3=Color3.fromRGB(20,60,20)
+
+	local success=false
+	pcall(function()
+		local servers=HttpService:JSONDecode(game:HttpGet(
+			"https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
+		))
+		if servers and servers.data then
+			local current=game.JobId
+			for _,s in ipairs(servers.data) do
+				if s.id~=current and s.playing<s.maxPlayers then
+					TeleportService:TeleportToPlaceInstance(game.PlaceId,s.id,plr)
+					success=true
+					break
+				end
+			end
+		end
+	end)
+
+	if not success then
+		hopBtn.Text="No Server Found!"
+		hopBtn.BackgroundColor3=Color3.fromRGB(80,20,20)
+		task.wait(2)
+		hopBtn.Text="Hop Server"
+		hopBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+		isHopping=false
+	end
+end)
 terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not terrainEnabled) end)
 lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not lessVfxEnabled) end)
 
@@ -606,6 +678,7 @@ applyBright(2)
 updateModeHighlight()
 
 -- FPS/Ping loop
+-- FIX #5: Parse ping an toàn hơn
 local fps,last,frames=0,tick(),0
 RS.RenderStepped:Connect(function()
 	frames+=1
@@ -614,8 +687,13 @@ RS.RenderStepped:Connect(function()
 		fps=math.floor(frames/(now-last))
 		frames=0
 		last=now
-		local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
-		local ping=tonumber(pingStr:match("%d+")) or 0
+		local ping=0
+		pcall(function()
+			local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+			-- Lấy số đầu tiên trong chuỗi, bỏ qua ký tự lạ
+			local num=pingStr:match("(%d+%.?%d*)")
+			ping=num and math.floor(tonumber(num)) or 0
+		end)
 		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
 	end
 	local rainbow=Color3.fromHSV((tick()%5)/5,1,1)
