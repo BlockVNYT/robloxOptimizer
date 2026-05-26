@@ -37,15 +37,38 @@ local PlayerGui=plr:WaitForChild("PlayerGui")
 local oldGui=PlayerGui:FindFirstChild("BlockVNHub")
 if oldGui then oldGui:Destroy() end
 
-local cfgFile="BlockVNHub.json"
-local cfg={low=false}
+-- ─── HỆ THỐNG CẤU HÌNH (CONFIG) ──────────────────────────────────────────────
+local cfgFile="BlockVNHub_Config.json"
+local cfg={
+	boostEnabled = false,
+	terrainEnabled = false,
+	lessVfxEnabled = false,
+	modeIndex = 2,         -- 1: Bright, 2: Off, 3: Dark
+	effectLevel = 5,
+	fpsPingEnabled = true
+}
+
+-- Đọc cấu hình cũ nếu có dữ liệu đã lưu
 if isfile and isfile(cfgFile) then
-	pcall(function() cfg=HttpService:JSONDecode(readfile(cfgFile)) end)
-end
-local function saveCfg()
-	if writefile then writefile(cfgFile,HttpService:JSONEncode(cfg)) end
+	pcall(function() 
+		local decoded = HttpService:JSONDecode(readfile(cfgFile)) 
+		if decoded and type(decoded) == "table" then
+			for k, v in pairs(decoded) do
+				cfg[k] = v
+			end
+		end
+	end)
 end
 
+-- Hàm lưu cấu hình vào file
+local function saveCfg()
+	if writefile then 
+		pcall(function()
+			writefile(cfgFile, HttpService:JSONEncode(cfg)) 
+		end)
+	end
+end
+-- ─────────────────────────────────────────────────────────────────────────────
 
 local gui=Instance.new("ScreenGui")
 gui.Name="BlockVNHub"
@@ -75,6 +98,7 @@ l.Font=Enum.Font.SourceSansBold
 l.TextStrokeTransparency=0
 l.TextStrokeColor3=Color3.new(0,0,0)
 l.ZIndex=10
+l.Visible = cfg.fpsPingEnabled -- Áp dụng cấu hình FPS/Ping ban đầu
 
 -- Reduce Lag button
 local b1=Instance.new("TextButton")
@@ -134,7 +158,6 @@ lessVfxBtn.Visible=false
 addRainbowStroke(lessVfxBtn,2)
 
 -- Mode button
-local modeIndex=2
 local modeExpanded=false
 
 local b2=Instance.new("TextButton")
@@ -190,8 +213,6 @@ darkModeBtn.Visible=false
 addRainbowStroke(darkModeBtn,2)
 
 -- Effect row
-local effectLevel=5
-
 local minusBtn=Instance.new("TextButton")
 minusBtn.Parent=gui
 minusBtn.Size=UDim2.new(0,35,0,35)
@@ -228,6 +249,64 @@ plusBtn.Font=Enum.Font.SourceSansBold
 plusBtn.Text="+"
 addRainbowStroke(plusBtn,2)
 
+-- Server Options button
+local serverMainBtn=Instance.new("TextButton")
+serverMainBtn.Parent=gui
+serverMainBtn.Size=UDim2.new(0,240,0,35)
+serverMainBtn.Position=UDim2.new(0.5,-120,0,125)
+serverMainBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+serverMainBtn.TextColor3=Color3.new(1,1,1)
+serverMainBtn.TextScaled=false
+serverMainBtn.TextSize=17
+serverMainBtn.Font=Enum.Font.SourceSansBold
+serverMainBtn.Text="Server Options"
+addRainbowStroke(serverMainBtn,2)
+
+local serverExpanded=false
+
+-- Hop Server sub-button
+local TeleportService=game:GetService("TeleportService")
+local hopBtn=Instance.new("TextButton")
+hopBtn.Parent=gui
+hopBtn.Size=UDim2.new(0,150,0,30)
+hopBtn.Position=UDim2.new(0.5,-278,0,144)
+hopBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+hopBtn.TextColor3=Color3.new(1,1,1)
+hopBtn.TextScaled=false
+hopBtn.TextSize=16
+hopBtn.Font=Enum.Font.SourceSansBold
+hopBtn.Text="Hop Server"
+hopBtn.Visible=false
+addRainbowStroke(hopBtn,2)
+
+-- Rejoin sub-button
+local rejoinBtn=Instance.new("TextButton")
+rejoinBtn.Parent=gui
+rejoinBtn.Size=UDim2.new(0,150,0,30)
+rejoinBtn.Position=UDim2.new(0.5,-278,0,177)
+rejoinBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+rejoinBtn.TextColor3=Color3.new(1,1,1)
+rejoinBtn.TextScaled=false
+rejoinBtn.TextSize=16
+rejoinBtn.Font=Enum.Font.SourceSansBold
+rejoinBtn.Text="Rejoin Server"
+rejoinBtn.Visible=false
+addRainbowStroke(rejoinBtn,2)
+
+-- Show FPS/Ping sub-button
+local fpsToggleBtn=Instance.new("TextButton")
+fpsToggleBtn.Parent=gui
+fpsToggleBtn.Size=UDim2.new(0,150,0,30)
+fpsToggleBtn.Position=UDim2.new(0.5,-278,0,210)
+fpsToggleBtn.BackgroundColor3=cfg.fpsPingEnabled and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
+fpsToggleBtn.TextColor3=Color3.new(1,1,1)
+fpsToggleBtn.TextScaled=false
+fpsToggleBtn.TextSize=16
+fpsToggleBtn.Font=Enum.Font.SourceSansBold
+fpsToggleBtn.Text=cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
+fpsToggleBtn.Visible=false
+addRainbowStroke(fpsToggleBtn,2)
+
 -- Note
 local note=Instance.new("TextLabel")
 note.Parent=gui
@@ -248,27 +327,12 @@ local dragInput
 local dragStart
 local startPos
 
--- Hop Server button
-local TeleportService=game:GetService("TeleportService")
-
-local hopBtn=Instance.new("TextButton")
-hopBtn.Parent=gui
-hopBtn.Size=UDim2.new(0,240,0,35)
-hopBtn.Position=UDim2.new(0.5,-120,0,125)
-hopBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
-hopBtn.TextColor3=Color3.new(1,1,1)
-hopBtn.TextScaled=false
-hopBtn.TextSize=17
-hopBtn.Font=Enum.Font.SourceSansBold
-hopBtn.Text="Hop Server"
-addRainbowStroke(hopBtn,2)
-
 local draggableObjects={
 	l,b1,b2,
 	boostBtn,terrainBtn,lessVfxBtn,
 	brightModeBtn,offModeBtn,darkModeBtn,
 	minusBtn,effectAdjust,plusBtn,
-	hopBtn,
+	serverMainBtn,hopBtn,rejoinBtn,fpsToggleBtn,
 	note
 }
 
@@ -314,31 +378,31 @@ task.delay(5,function()
 	note:Destroy()
 end)
 
--- FIX #3: Alt hide/show - lưu trạng thái visible trước khi ẩn để restore đúng
+-- Alt hide/show
 local uiVisible=true
 UIS.InputBegan:Connect(function(input,gpe)
 	if gpe then return end
 	if input.KeyCode==Enum.KeyCode.LeftAlt then
 		uiVisible=not uiVisible
 		if uiVisible then
-			-- Restore: chỉ hiện các object thuộc nhóm draggable (luôn visible khi UI bật)
-			-- Sub-button giữ nguyên trạng thái expanded/collapsed
-			l.Visible=true
 			b1.Visible=true
 			b2.Visible=true
 			minusBtn.Visible=true
 			effectAdjust.Visible=true
 			plusBtn.Visible=true
-			hopBtn.Visible=true
+			serverMainBtn.Visible=true
 			boostBtn.Visible=lagExpanded
 			terrainBtn.Visible=lagExpanded
 			lessVfxBtn.Visible=lagExpanded
 			brightModeBtn.Visible=modeExpanded
 			offModeBtn.Visible=modeExpanded
 			darkModeBtn.Visible=modeExpanded
+			hopBtn.Visible=serverExpanded
+			rejoinBtn.Visible=serverExpanded
+			fpsToggleBtn.Visible=serverExpanded
 		else
 			for _,v in ipairs(gui:GetChildren()) do
-				if v~=note then v.Visible=false end
+				if v~=note and v~=l then v.Visible=false end
 			end
 		end
 	end
@@ -350,34 +414,29 @@ plr.Idled:Connect(function()
 	VirtualUser:ClickButton2(Vector2.new())
 end)
 
--- FIX #1: Tách saved riêng cho từng hàm
 local savedBoost={}
 local savedTerrain={}
 
 local brightConn=nil
 
 local function updateEffectText()
-	if modeIndex==1 then
-		effectAdjust.Text="Brightness: "..effectLevel
-	elseif modeIndex==3 then
-		effectAdjust.Text="Darkness: "..effectLevel
+	if cfg.modeIndex==1 then
+		effectAdjust.Text="Brightness: "..cfg.effectLevel
+	elseif cfg.modeIndex==3 then
+		effectAdjust.Text="Darkness: "..cfg.effectLevel
 	else
 		effectAdjust.Text="Effect: OFF"
 	end
 end
 
 local function updateModeHighlight()
-	brightModeBtn.BackgroundColor3=modeIndex==1
+	brightModeBtn.BackgroundColor3=cfg.modeIndex==1
 		and Color3.fromRGB(60,60,20) or Color3.fromRGB(30,30,30)
-	offModeBtn.BackgroundColor3=modeIndex==2
+	offModeBtn.BackgroundColor3=cfg.modeIndex==2
 		and Color3.fromRGB(20,60,20) or Color3.fromRGB(30,30,30)
-	darkModeBtn.BackgroundColor3=modeIndex==3
+	darkModeBtn.BackgroundColor3=cfg.modeIndex==3
 		and Color3.fromRGB(20,20,60) or Color3.fromRGB(30,30,30)
 end
-
-local boostEnabled=false
-local terrainEnabled=false
-local lessVfxEnabled=false
 
 -- ─── Less VFX ────────────────────────────────────────────────────────────────
 local vfxSaved={}
@@ -407,9 +466,8 @@ local function isShadowCaster(v)
 end
 
 local function applyVfxToObject(v)
-	if not lessVfxEnabled then return end
+	if not cfg.lessVfxEnabled then return end
 
-	-- FIX #2: Kiểm tra plr.Character đúng cách, tránh fallback về game
 	local char=plr.Character
 	if isVFXType(v) and (not char or not v:IsDescendantOf(char)) then
 		if vfxSaved[v]==nil then
@@ -439,7 +497,8 @@ local function applyVfxToObject(v)
 end
 
 local function applyLessVFX(state)
-	lessVfxEnabled=state
+	cfg.lessVfxEnabled=state
+	saveCfg() -- Lưu config
 	lessVfxBtn.Text=state and "Less VFX: ON" or "Less VFX: OFF"
 	lessVfxBtn.BackgroundColor3=state
 		and Color3.fromRGB(80,20,20) or Color3.fromRGB(30,30,30)
@@ -481,7 +540,8 @@ end
 -- ─────────────────────────────────────────────────────────────────────────────
 
 local function applyBoostFPS(state)
-	boostEnabled=state
+	cfg.boostEnabled=state
+	saveCfg() -- Lưu config
 	boostBtn.Text=state and "Boost FPS: ON" or "Boost FPS: OFF"
 	boostBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
 
@@ -508,7 +568,6 @@ local function applyBoostFPS(state)
 			end
 		elseif v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
 			if state then
-				-- FIX #1: dùng savedBoost thay vì saved
 				if not savedBoost[v] then savedBoost[v]=v.Material end
 				v.Material=Enum.Material.SmoothPlastic
 				v.Reflectance=0
@@ -536,13 +595,13 @@ local function applyBoostFPS(state)
 end
 
 local function applyRemoveTerrain(state)
-	terrainEnabled=state
+	cfg.terrainEnabled=state
+	saveCfg() -- Lưu config
 	terrainBtn.Text=state and "Remove Terrain: ON" or "Remove Terrain: OFF"
 	terrainBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
 	for _,v in ipairs(workspace:GetDescendants()) do
 		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
 			if state then
-				-- FIX #1: dùng savedTerrain thay vì saved
 				if not savedTerrain[v] then savedTerrain[v]=v.LocalTransparencyModifier end
 				v.LocalTransparencyModifier=1
 			else
@@ -562,13 +621,14 @@ end
 
 local function applyBright(mode)
 	if brightConn then brightConn:Disconnect() brightConn=nil end
-	modeIndex=mode
+	cfg.modeIndex=mode
+	saveCfg() -- Lưu config
 	updateEffectText()
 	updateModeHighlight()
 	if mode==1 then
 		b2.Text="Mode: BRIGHT"
 		brightConn=RS.RenderStepped:Connect(function()
-			local intensity=math.clamp(effectLevel,1,10)
+			local intensity=math.clamp(cfg.effectLevel,1,10)
 			Lighting.ClockTime=14
 			Lighting.FogEnd=100000
 			Lighting.GlobalShadows=false
@@ -584,16 +644,16 @@ local function applyBright(mode)
 		Lighting.Brightness=old.Brightness
 		Lighting.ClockTime=old.ClockTime
 		Lighting.FogEnd=old.FogEnd
-		Lighting.GlobalShadows=lessVfxEnabled and false or old.GlobalShadows
+		Lighting.GlobalShadows=cfg.lessVfxEnabled and false or old.GlobalShadows
 		Lighting.Ambient=old.Ambient
 		Lighting.OutdoorAmbient=old.OutdoorAmbient
 		Lighting.ExposureCompensation=old.ExposureCompensation
 	elseif mode==3 then
 		b2.Text="Mode: DARK"
 		brightConn=RS.RenderStepped:Connect(function()
-			local darkness=math.clamp(effectLevel,1,10)
+			local darkness=math.clamp(cfg.effectLevel,1,10)
 			Lighting.ClockTime=0
-			Lighting.GlobalShadows=not lessVfxEnabled
+			Lighting.GlobalShadows=not cfg.lessVfxEnabled
 			Lighting.FogEnd=3000-(darkness*260)
 			Lighting.Brightness=1.5-(darkness*0.13)
 			local ambient=math.clamp(0.6-(darkness*0.055),0,1)
@@ -610,6 +670,14 @@ b1.MouseButton1Click:Connect(function()
 	boostBtn.Visible=lagExpanded
 	terrainBtn.Visible=lagExpanded
 	lessVfxBtn.Visible=lagExpanded
+end)
+
+-- Server Options Click logic
+serverMainBtn.MouseButton1Click:Connect(function()
+	serverExpanded=not serverExpanded
+	hopBtn.Visible=serverExpanded
+	rejoinBtn.Visible=serverExpanded
+	fpsToggleBtn.Visible=serverExpanded
 end)
 
 -- Hop Server logic
@@ -642,14 +710,36 @@ hopBtn.MouseButton1Click:Connect(function()
 		hopBtn.BackgroundColor3=Color3.fromRGB(80,20,20)
 		task.wait(2)
 		hopBtn.Text="Hop Server"
-		hopBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+		hopBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
 		isHopping=false
 	end
 end)
 
-boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not boostEnabled) end)
-terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not terrainEnabled) end)
-lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not lessVfxEnabled) end)
+-- Rejoin Server logic
+rejoinBtn.MouseButton1Click:Connect(function()
+	rejoinBtn.Text="Rejoining..."
+	rejoinBtn.BackgroundColor3=Color3.fromRGB(20,60,20)
+	pcall(function()
+		if #Players:GetPlayers() <= 1 then
+			TeleportService:Teleport(game.PlaceId, plr)
+		else
+			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
+		end
+	end)
+end)
+
+-- Show/Hide FPS/Ping độc lập hoàn toàn
+fpsToggleBtn.MouseButton1Click:Connect(function()
+	cfg.fpsPingEnabled = not cfg.fpsPingEnabled
+	saveCfg() -- Lưu trạng thái nút FPS/Ping
+	l.Visible = cfg.fpsPingEnabled
+	fpsToggleBtn.Text = cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
+	fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
+end)
+
+boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not cfg.boostEnabled) end)
+terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not cfg.terrainEnabled) end)
+lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not cfg.lessVfxEnabled) end)
 
 b2.MouseButton1Click:Connect(function()
 	modeExpanded=not modeExpanded
@@ -663,24 +753,25 @@ offModeBtn.MouseButton1Click:Connect(function() applyBright(2) end)
 darkModeBtn.MouseButton1Click:Connect(function() applyBright(3) end)
 
 plusBtn.MouseButton1Click:Connect(function()
-	effectLevel=math.min(effectLevel+1,10)
+	cfg.effectLevel=math.min(cfg.effectLevel+1,10)
+	saveCfg()
 	updateEffectText()
 end)
 minusBtn.MouseButton1Click:Connect(function()
-	effectLevel=math.max(effectLevel-1,1)
+	cfg.effectLevel=math.max(cfg.effectLevel-1,1)
+	saveCfg()
 	updateEffectText()
 end)
 
--- Init
+-- Init (Tự động áp dụng lại config cũ khi chạy script ở server mới)
 task.wait(0.5)
-applyBoostFPS(false)
-applyRemoveTerrain(false)
-applyLessVFX(false)
-applyBright(2)
+applyBoostFPS(cfg.boostEnabled)
+applyRemoveTerrain(cfg.terrainEnabled)
+applyLessVFX(cfg.lessVfxEnabled)
+applyBright(cfg.modeIndex)
 updateModeHighlight()
 
 -- FPS/Ping loop
--- FIX #5: Parse ping an toàn hơn
 local fps,last,frames=0,tick(),0
 RS.RenderStepped:Connect(function()
 	frames+=1
@@ -692,7 +783,6 @@ RS.RenderStepped:Connect(function()
 		local ping=0
 		pcall(function()
 			local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
-			-- Lấy số đầu tiên trong chuỗi, bỏ qua ký tự lạ
 			local num=pingStr:match("(%d+%.?%d*)")
 			ping=num and math.floor(tonumber(num)) or 0
 		end)
