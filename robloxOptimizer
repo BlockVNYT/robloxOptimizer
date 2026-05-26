@@ -646,6 +646,8 @@ hopBtn.MouseButton1Click:Connect(function()
 		isHopping=false
 	end
 end)
+
+boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not boostEnabled) end)
 terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not terrainEnabled) end)
 lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not lessVfxEnabled) end)
 
