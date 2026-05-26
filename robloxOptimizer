@@ -1,5 +1,4 @@
--- made by Itsxmanh-BlockVN
-print("helo")
+
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
@@ -10,254 +9,618 @@ local Stats=game:GetService("Stats")
 local Lighting=game:GetService("Lighting")
 local HttpService=game:GetService("HttpService")
 local UIS=game:GetService("UserInputService")
+local VirtualUser=game:GetService("VirtualUser")
+
+if not getgenv().BlockVNOriginalLighting then
+	getgenv().BlockVNOriginalLighting={
+		Brightness=Lighting.Brightness,
+		ClockTime=Lighting.ClockTime,
+		FogEnd=Lighting.FogEnd,
+		GlobalShadows=Lighting.GlobalShadows,
+		Ambient=Lighting.Ambient,
+		OutdoorAmbient=Lighting.OutdoorAmbient,
+		ExposureCompensation=Lighting.ExposureCompensation
+	}
+else
+	local old=getgenv().BlockVNOriginalLighting
+	Lighting.Brightness=old.Brightness
+	Lighting.ClockTime=old.ClockTime
+	Lighting.FogEnd=old.FogEnd
+	Lighting.GlobalShadows=old.GlobalShadows
+	Lighting.Ambient=old.Ambient
+	Lighting.OutdoorAmbient=old.OutdoorAmbient
+	Lighting.ExposureCompensation=old.ExposureCompensation
+end
 
 local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
 local PlayerGui=plr:WaitForChild("PlayerGui")
 
 local oldGui=PlayerGui:FindFirstChild("BlockVNHub")
-if oldGui then
-	oldGui:Destroy()
-end
+if oldGui then oldGui:Destroy() end
 
--- config
 local cfgFile="BlockVNHub.json"
-local cfg={low=false,bright=false}
-
+local cfg={low=false}
 if isfile and isfile(cfgFile) then
-	pcall(function()
-		cfg=HttpService:JSONDecode(readfile(cfgFile))
-	end)
+	pcall(function() cfg=HttpService:JSONDecode(readfile(cfgFile)) end)
 end
-
 local function saveCfg()
-	if writefile then
-		writefile(cfgFile,HttpService:JSONEncode(cfg))
-	end
+	if writefile then writefile(cfgFile,HttpService:JSONEncode(cfg)) end
 end
 
--- optimize
-settings().Rendering.QualityLevel=Enum.QualityLevel.Level01
-Lighting.GlobalShadows=false
-Lighting.FogEnd=9e9
 
--- gui
 local gui=Instance.new("ScreenGui")
 gui.Name="BlockVNHub"
 gui.IgnoreGuiInset=true
 gui.ResetOnSpawn=false
 gui.Parent=PlayerGui
 
--- rainbow outlines
 local rainbowObjects={}
-
 local function addRainbowStroke(obj,thickness)
 	local stroke=Instance.new("UIStroke")
 	stroke.Thickness=thickness or 2
 	stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
 	stroke.Parent=obj
-
 	table.insert(rainbowObjects,stroke)
 	return stroke
 end
 
--- fps/ping label
+-- FPS/Ping label
 local l=Instance.new("TextLabel")
 l.Parent=gui
-l.Size=UDim2.new(0,260,0,40)
-l.Position=UDim2.new(0.5,-130,0,0)
+l.Size=UDim2.new(0,240,0,40)
+l.Position=UDim2.new(0.5,-120,0,0)
 l.BackgroundTransparency=1
-l.TextScaled=true
+l.TextScaled=false
+l.TextSize=19
 l.Font=Enum.Font.SourceSansBold
 l.TextStrokeTransparency=0
 l.TextStrokeColor3=Color3.new(0,0,0)
 l.ZIndex=10
 
--- lag button
+-- Reduce Lag button
 local b1=Instance.new("TextButton")
 b1.Parent=gui
-b1.Size=UDim2.new(0,100,0,35)
-b1.Position=UDim2.new(0.5,-100,0,45)
+b1.Size=UDim2.new(0,140,0,35)
+b1.Position=UDim2.new(0.5,-120,0,45)
 b1.BackgroundColor3=Color3.fromRGB(40,40,40)
 b1.TextColor3=Color3.new(1,1,1)
-b1.TextScaled=true
+b1.TextScaled=false
+b1.TextSize=17
 b1.Font=Enum.Font.SourceSansBold
-b1.Text="Lag: OFF"
-
+b1.Text="Reduce Lag"
 addRainbowStroke(b1,2)
 
--- bright button
+local lagExpanded=false
+
+-- Boost FPS sub-button
+local boostBtn=Instance.new("TextButton")
+boostBtn.Parent=gui
+boostBtn.Size=UDim2.new(0,150,0,30)
+boostBtn.Position=UDim2.new(0.5,-278,0,45)
+boostBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+boostBtn.TextColor3=Color3.new(1,1,1)
+boostBtn.TextScaled=false
+boostBtn.TextSize=16
+boostBtn.Font=Enum.Font.SourceSansBold
+boostBtn.Text="Boost FPS: OFF"
+boostBtn.Visible=false
+addRainbowStroke(boostBtn,2)
+
+-- Remove Terrain sub-button
+local terrainBtn=Instance.new("TextButton")
+terrainBtn.Parent=gui
+terrainBtn.Size=UDim2.new(0,150,0,30)
+terrainBtn.Position=UDim2.new(0.5,-278,0,78)
+terrainBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+terrainBtn.TextColor3=Color3.new(1,1,1)
+terrainBtn.TextScaled=false
+terrainBtn.TextSize=16
+terrainBtn.Font=Enum.Font.SourceSansBold
+terrainBtn.Text="Remove Terrain: OFF"
+terrainBtn.Visible=false
+addRainbowStroke(terrainBtn,2)
+
+-- Less VFX sub-button (Thay thế cho Ultra FPS cũ)
+local lessVfxBtn=Instance.new("TextButton")
+lessVfxBtn.Parent=gui
+lessVfxBtn.Size=UDim2.new(0,150,0,30)
+lessVfxBtn.Position=UDim2.new(0.5,-278,0,111)
+lessVfxBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+lessVfxBtn.TextColor3=Color3.new(1,1,1)
+lessVfxBtn.TextScaled=false
+lessVfxBtn.TextSize=16
+lessVfxBtn.Font=Enum.Font.SourceSansBold
+lessVfxBtn.Text="Less VFX: OFF"
+lessVfxBtn.Visible=false
+addRainbowStroke(lessVfxBtn,2)
+
+-- Mode button
+local modeIndex=2
+local modeExpanded=false
+
 local b2=Instance.new("TextButton")
 b2.Parent=gui
 b2.Size=UDim2.new(0,100,0,35)
-b2.Position=UDim2.new(0.5,0,0,45)
+b2.Position=UDim2.new(0.5,20,0,45)
 b2.BackgroundColor3=Color3.fromRGB(40,40,40)
 b2.TextColor3=Color3.new(1,1,1)
-b2.TextScaled=true
+b2.TextScaled=false
+b2.TextSize=17
 b2.Font=Enum.Font.SourceSansBold
-b2.Text="Bright: OFF"
-
+b2.Text="Mode: OFF"
 addRainbowStroke(b2,2)
 
--- note
+-- Mode sub-buttons
+local brightModeBtn=Instance.new("TextButton")
+brightModeBtn.Parent=gui
+brightModeBtn.Size=UDim2.new(0,120,0,30)
+brightModeBtn.Position=UDim2.new(0.5,128,0,45)
+brightModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+brightModeBtn.TextColor3=Color3.new(1,1,1)
+brightModeBtn.TextScaled=false
+brightModeBtn.TextSize=16
+brightModeBtn.Font=Enum.Font.SourceSansBold
+brightModeBtn.Text="Bright"
+brightModeBtn.Visible=false
+addRainbowStroke(brightModeBtn,2)
+
+local offModeBtn=Instance.new("TextButton")
+offModeBtn.Parent=gui
+offModeBtn.Size=UDim2.new(0,120,0,30)
+offModeBtn.Position=UDim2.new(0.5,128,0,78)
+offModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+offModeBtn.TextColor3=Color3.new(1,1,1)
+offModeBtn.TextScaled=false
+offModeBtn.TextSize=16
+offModeBtn.Font=Enum.Font.SourceSansBold
+offModeBtn.Text="Off"
+offModeBtn.Visible=false
+addRainbowStroke(offModeBtn,2)
+
+local darkModeBtn=Instance.new("TextButton")
+darkModeBtn.Parent=gui
+darkModeBtn.Size=UDim2.new(0,120,0,30)
+darkModeBtn.Position=UDim2.new(0.5,128,0,111)
+darkModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
+darkModeBtn.TextColor3=Color3.new(1,1,1)
+darkModeBtn.TextScaled=false
+darkModeBtn.TextSize=16
+darkModeBtn.Font=Enum.Font.SourceSansBold
+darkModeBtn.Text="Dark"
+darkModeBtn.Visible=false
+addRainbowStroke(darkModeBtn,2)
+
+-- Effect row
+local effectLevel=5
+
+local minusBtn=Instance.new("TextButton")
+minusBtn.Parent=gui
+minusBtn.Size=UDim2.new(0,35,0,35)
+minusBtn.Position=UDim2.new(0.5,-120,0,85)
+minusBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+minusBtn.TextColor3=Color3.new(1,1,1)
+minusBtn.TextScaled=false
+minusBtn.TextSize=20
+minusBtn.Font=Enum.Font.SourceSansBold
+minusBtn.Text="-"
+addRainbowStroke(minusBtn,2)
+
+local effectAdjust=Instance.new("TextButton")
+effectAdjust.Parent=gui
+effectAdjust.Size=UDim2.new(0,170,0,35)
+effectAdjust.Position=UDim2.new(0.5,-85,0,85)
+effectAdjust.BackgroundColor3=Color3.fromRGB(40,40,40)
+effectAdjust.TextColor3=Color3.new(1,1,1)
+effectAdjust.TextScaled=false
+effectAdjust.TextSize=17
+effectAdjust.Font=Enum.Font.SourceSansBold
+effectAdjust.Text="Effect: OFF"
+addRainbowStroke(effectAdjust,2)
+
+local plusBtn=Instance.new("TextButton")
+plusBtn.Parent=gui
+plusBtn.Size=UDim2.new(0,35,0,35)
+plusBtn.Position=UDim2.new(0.5,85,0,85)
+plusBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
+plusBtn.TextColor3=Color3.new(1,1,1)
+plusBtn.TextScaled=false
+plusBtn.TextSize=20
+plusBtn.Font=Enum.Font.SourceSansBold
+plusBtn.Text="+"
+addRainbowStroke(plusBtn,2)
+
+-- Note
 local note=Instance.new("TextLabel")
 note.Parent=gui
 note.Size=UDim2.new(0,320,0,30)
-note.Position=UDim2.new(0.5,-160,0,85)
+note.Position=UDim2.new(0.5,-160,0,130)
 note.BackgroundTransparency=1
 note.Text="Bấm Alt Trái / Left Alt để ẩn/hiện UI"
-note.TextScaled=true
+note.TextScaled=false
+note.TextSize=16
 note.Font=Enum.Font.SourceSansBold
 note.TextColor3=Color3.new(1,1,1)
 note.TextStrokeTransparency=0
 note.TextStrokeColor3=Color3.new(0,0,0)
-note.ZIndex=10
 
--- anti afk every 19 minutes
-task.spawn(function()
-	while true do
-		task.wait(1140) -- 19 minutes
+-- Draggable
+local drag=false
+local dragInput
+local dragStart
+local startPos
 
-		pcall(function()
-			VirtualUser:CaptureController()
-			VirtualUser:ClickButton2(Vector2.new())
+local draggableObjects={
+	l,b1,b2,
+	boostBtn,terrainBtn,lessVfxBtn,
+	brightModeBtn,offModeBtn,darkModeBtn,
+	minusBtn,effectAdjust,plusBtn,
+	note
+}
+
+local function updateDrag(input)
+	local delta=input.Position-dragStart
+	for _,obj in ipairs(draggableObjects) do
+		obj.Position=UDim2.new(
+			startPos[obj].X.Scale,
+			startPos[obj].X.Offset+delta.X,
+			startPos[obj].Y.Scale,
+			startPos[obj].Y.Offset+delta.Y
+		)
+	end
+end
+
+l.InputBegan:Connect(function(input)
+	if input.UserInputType==Enum.UserInputType.MouseButton1 then
+		drag=true
+		dragStart=input.Position
+		startPos={}
+		for _,obj in ipairs(draggableObjects) do startPos[obj]=obj.Position end
+		input.Changed:Connect(function()
+			if input.UserInputState==Enum.UserInputState.End then drag=false end
 		end)
 	end
 end)
 
--- remove note after 5s
+l.InputChanged:Connect(function(input)
+	if input.UserInputType==Enum.UserInputType.MouseMovement then dragInput=input end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if drag and input==dragInput then updateDrag(input) end
+end)
+
+-- Note fade
 task.delay(5,function()
 	for i=1,20 do
 		note.TextTransparency=i/20
 		note.TextStrokeTransparency=i/20
 		task.wait(0.05)
 	end
-
 	note:Destroy()
 end)
 
--- hide/show ui
+-- Alt hide/show
 local uiVisible=true
-
 UIS.InputBegan:Connect(function(input,gpe)
-	if gpe then
-		return
-	end
-
+	if gpe then return end
 	if input.KeyCode==Enum.KeyCode.LeftAlt then
 		uiVisible=not uiVisible
-
 		for _,v in ipairs(gui:GetChildren()) do
-			if v~=note then
-				v.Visible=uiVisible
-			end
+			if v~=note then v.Visible=uiVisible end
 		end
 	end
+end)
+
+-- Anti AFK
+plr.Idled:Connect(function()
+	VirtualUser:CaptureController()
+	VirtualUser:ClickButton2(Vector2.new())
 end)
 
 local saved={}
 local brightConn=nil
 
-local function applyLow(state)
-	cfg.low=state
-	saveCfg()
+local function updateEffectText()
+	if modeIndex==1 then
+		effectAdjust.Text="Brightness: "..effectLevel
+	elseif modeIndex==3 then
+		effectAdjust.Text="Darkness: "..effectLevel
+	else
+		effectAdjust.Text="Effect: OFF"
+	end
+end
 
-	b1.Text=state and "Lag: ON" or "Lag: OFF"
+local function updateModeHighlight()
+	brightModeBtn.BackgroundColor3=modeIndex==1
+		and Color3.fromRGB(60,60,20) or Color3.fromRGB(30,30,30)
+	offModeBtn.BackgroundColor3=modeIndex==2
+		and Color3.fromRGB(20,60,20) or Color3.fromRGB(30,30,30)
+	darkModeBtn.BackgroundColor3=modeIndex==3
+		and Color3.fromRGB(20,20,60) or Color3.fromRGB(30,30,30)
+end
 
+local boostEnabled=false
+local terrainEnabled=false
+local lessVfxEnabled=false
+
+-- ─── Less VFX (Cũ là Ultra FPS) ──────────────────────────────────────────────
+local vfxSaved={}
+local vfxConn=nil
+
+local function isOtherCharacter(v)
+	for _,p in ipairs(Players:GetPlayers()) do
+		if p~=plr and p.Character and v:IsDescendantOf(p.Character) then
+			return true
+		end
+	end
+	return false
+end
+
+local function isVFXType(v)
+	return v:IsA("ParticleEmitter")
+		or v:IsA("Trail")
+		or v:IsA("Smoke")
+		or v:IsA("Fire")
+		or v:IsA("Sparkles")
+		or v:IsA("Beam")
+		or v:IsA("SelectionBox")
+end
+
+local function isShadowCaster(v)
+	return v:IsA("BasePart") or v:IsA("UnionOperation") or v:IsA("MeshPart") or v:IsA("SpecialMesh")
+end
+
+local function applyVfxToObject(v)
+	if not lessVfxEnabled then return end
+
+	if isVFXType(v) and not v:IsDescendantOf(plr.Character or game) then
+		if vfxSaved[v]==nil then
+			vfxSaved[v]=v.Enabled
+		end
+		v.Enabled=false
+
+	elseif isShadowCaster(v)
+		and not v:IsDescendantOf(plr.Character or game) then
+		if vfxSaved[v]==nil then
+			vfxSaved[v]=v.CastShadow
+		end
+		v.CastShadow=false
+
+	elseif (v:IsA("Decal") or v:IsA("Texture")) and isOtherCharacter(v) then
+		if vfxSaved[v]==nil then
+			vfxSaved[v]=v.Transparency
+		end
+		v.Transparency=1
+
+	elseif v:IsA("BasePart") and v.Name=="Handle" and isOtherCharacter(v) then
+		if vfxSaved[v]==nil then
+			vfxSaved[v]=v.LocalTransparencyModifier
+		end
+		v.LocalTransparencyModifier=1
+	end
+end
+
+local function applyLessVFX(state)
+	lessVfxEnabled=state
+	lessVfxBtn.Text=state and "Less VFX: ON" or "Less VFX: OFF"
+	lessVfxBtn.BackgroundColor3=state
+		and Color3.fromRGB(80,20,20) or Color3.fromRGB(30,30,30)
+
+	if state then
+		Lighting.GlobalShadows=false
+
+		for _,v in ipairs(workspace:GetDescendants()) do
+			applyVfxToObject(v)
+		end
+
+		vfxConn=workspace.DescendantAdded:Connect(function(v)
+			task.defer(applyVfxToObject,v)
+		end)
+	else
+		if vfxConn then
+			vfxConn:Disconnect()
+			vfxConn=nil
+		end
+
+		for v,original in pairs(vfxSaved) do
+			pcall(function()
+				if isVFXType(v) then
+					v.Enabled=original
+				elseif isShadowCaster(v) then
+					v.CastShadow=original
+				elseif v:IsA("Decal") or v:IsA("Texture") then
+					v.Transparency=original
+				elseif v:IsA("BasePart") then
+					v.LocalTransparencyModifier=original
+				end
+			end)
+		end
+
+		vfxSaved={}
+		Lighting.GlobalShadows=getgenv().BlockVNOriginalLighting.GlobalShadows
+	end
+end
+-- ─────────────────────────────────────────────────────────────────────────────
+
+local function applyBoostFPS(state)
+	boostEnabled=state
+	boostBtn.Text=state and "Boost FPS: ON" or "Boost FPS: OFF"
+	boostBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
+	
+	-- Phần xử lý khử màu sắc của Terrain (Xám hóa toàn bộ vật liệu terrain)
+	local terrain = workspace:FindFirstChildOfClass("Terrain")
+	if terrain then
+		for _, mat in ipairs(Enum.Material:GetEnumItems()) do
+			pcall(function()
+				if state then
+					terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50)) -- Biến thành màu xám đồng nhất
+				else
+					terrain:ResetMaterialColor(mat) -- Trả lại màu gốc khi Tắt Boost
+				end
+			end)
+		end
+	end
+
+	for _,v in ipairs(workspace:GetDescendants()) do
+		if v:IsA("Terrain") then
+			if state then
+				v.WaterWaveSize=0
+				v.WaterWaveSpeed=0
+				v.WaterReflectance=0
+				v.WaterTransparency=1
+			end
+		elseif v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
+			if state then
+				if not saved[v] then saved[v]=v.Material end
+				v.Material=Enum.Material.SmoothPlastic
+				v.Reflectance=0
+			else
+				if saved[v] then v.Material=saved[v] end
+			end
+		elseif v:IsA("Decal") or v:IsA("Texture") then
+			if state then
+				if not saved[v] then saved[v]=v.Transparency end
+				v.Transparency=1
+			else
+				if saved[v] then v.Transparency=saved[v] end
+			end
+		elseif v:IsA("ParticleEmitter") or v:IsA("Trail")
+			or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
+			if state then
+				if not saved[v] then saved[v]=v.Enabled end
+				v.Enabled=false
+			else
+				if saved[v]~=nil then v.Enabled=saved[v] end
+			end
+		end
+	end
+	if not state then saved = {} end
+end
+
+local function applyRemoveTerrain(state)
+	terrainEnabled=state
+	terrainBtn.Text=state and "Remove Terrain: ON" or "Remove Terrain: OFF"
+	terrainBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
 	for _,v in ipairs(workspace:GetDescendants()) do
 		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
 			if state then
-				saved[v]=v.LocalTransparencyModifier
+				if not saved[v] then saved[v]=v.LocalTransparencyModifier end
 				v.LocalTransparencyModifier=1
 			else
-				v.LocalTransparencyModifier=saved[v] or 0
+				if saved[v] then v.LocalTransparencyModifier=saved[v] end
 			end
-
 		elseif v:IsA("Decal") or v:IsA("Texture") then
 			if state then
-				saved[v]=v.Transparency
+				if not saved[v] then saved[v]=v.Transparency end
 				v.Transparency=1
 			else
-				v.Transparency=saved[v] or 0
-			end
-
-		elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-			if state then
-				saved[v]=v.Enabled
-				v.Enabled=false
-			else
-				v.Enabled=saved[v]~=false
+				if saved[v] then v.Transparency=saved[v] end
 			end
 		end
 	end
+	if not state then saved = {} end
 end
 
-local function applyBright(state)
-	cfg.bright=state
-	saveCfg()
-
-	b2.Text=state and "Bright: ON" or "Bright: OFF"
-
-	if state then
-		if not brightConn then
-			brightConn=RS.RenderStepped:Connect(function()
-				Lighting.Brightness=5
-				Lighting.ClockTime=14
-				Lighting.FogEnd=100000
-				Lighting.GlobalShadows=false
-				Lighting.Ambient=Color3.new(1,1,1)
-				Lighting.OutdoorAmbient=Color3.new(1,1,1)
-			end)
-		end
-	else
-		if brightConn then
-			brightConn:Disconnect()
-			brightConn=nil
-		end
+local function applyBright(mode)
+	if brightConn then brightConn:Disconnect() brightConn=nil end
+	modeIndex=mode
+	updateEffectText()
+	updateModeHighlight()
+	if mode==1 then
+		b2.Text="Mode: BRIGHT"
+		brightConn=RS.RenderStepped:Connect(function()
+			local intensity=math.clamp(effectLevel,1,10)
+			Lighting.ClockTime=14
+			Lighting.FogEnd=100000
+			Lighting.GlobalShadows=false
+			Lighting.Brightness=1+(intensity*0.45)
+			local ambient=0.2+(intensity*0.075)
+			Lighting.Ambient=Color3.new(ambient,ambient,ambient)
+			Lighting.OutdoorAmbient=Color3.new(ambient,ambient,ambient)
+			Lighting.ExposureCompensation=intensity*0.22
+		end)
+	elseif mode==2 then
+		b2.Text="Mode: OFF"
+		local old=getgenv().BlockVNOriginalLighting
+		Lighting.Brightness=old.Brightness
+		Lighting.ClockTime=old.ClockTime
+		Lighting.FogEnd=old.FogEnd
+		Lighting.GlobalShadows=lessVfxEnabled and false or old.GlobalShadows
+		Lighting.Ambient=old.Ambient
+		Lighting.OutdoorAmbient=old.OutdoorAmbient
+		Lighting.ExposureCompensation=old.ExposureCompensation
+	elseif mode==3 then
+		b2.Text="Mode: DARK"
+		brightConn=RS.RenderStepped:Connect(function()
+			local darkness=math.clamp(effectLevel,1,10)
+			Lighting.ClockTime=0
+			Lighting.GlobalShadows=not lessVfxEnabled
+			Lighting.FogEnd=3000-(darkness*260)
+			Lighting.Brightness=1.5-(darkness*0.13)
+			local ambient=math.clamp(0.6-(darkness*0.055),0,1)
+			Lighting.Ambient=Color3.new(ambient,ambient,ambient)
+			Lighting.OutdoorAmbient=Color3.new(ambient,ambient,ambient)
+			Lighting.ExposureCompensation=-(darkness*0.28)
+		end)
 	end
 end
 
+-- Button logic
 b1.MouseButton1Click:Connect(function()
-	applyLow(not cfg.low)
+	lagExpanded=not lagExpanded
+	boostBtn.Visible=lagExpanded
+	terrainBtn.Visible=lagExpanded
+	lessVfxBtn.Visible=lagExpanded
 end)
+
+boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not boostEnabled) end)
+terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not terrainEnabled) end)
+lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not lessVfxEnabled) end)
 
 b2.MouseButton1Click:Connect(function()
-	applyBright(not cfg.bright)
+	modeExpanded=not modeExpanded
+	brightModeBtn.Visible=modeExpanded
+	offModeBtn.Visible=modeExpanded
+	darkModeBtn.Visible=modeExpanded
 end)
 
--- restore config
+brightModeBtn.MouseButton1Click:Connect(function() applyBright(1) end)
+offModeBtn.MouseButton1Click:Connect(function() applyBright(2) end)
+darkModeBtn.MouseButton1Click:Connect(function() applyBright(3) end)
+
+plusBtn.MouseButton1Click:Connect(function()
+	effectLevel=math.min(effectLevel+1,10)
+	updateEffectText()
+end)
+minusBtn.MouseButton1Click:Connect(function()
+	effectLevel=math.max(effectLevel-1,1)
+	updateEffectText()
+end)
+
+-- Init
 task.wait(0.5)
+applyBoostFPS(false)
+applyRemoveTerrain(false)
+applyLessVFX(false)
+applyBright(2)
+updateModeHighlight()
 
-applyLow(cfg.low)
-applyBright(cfg.bright)
-
--- fps/ping update
+-- FPS/Ping loop
 local fps,last,frames=0,tick(),0
-
 RS.RenderStepped:Connect(function()
 	frames+=1
-
 	local now=tick()
-
 	if now-last>=0.25 then
 		fps=math.floor(frames/(now-last))
-
 		frames=0
 		last=now
-
 		local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
 		local ping=tonumber(pingStr:match("%d+")) or 0
-
 		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
 	end
-
-	-- rainbow text
 	local rainbow=Color3.fromHSV((tick()%5)/5,1,1)
-
 	l.TextColor3=rainbow
-
-	-- rainbow outlines
 	for _,stroke in ipairs(rainbowObjects) do
 		stroke.Color=rainbow
 	end
 end)
- 
