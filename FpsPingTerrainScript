@@ -3,22 +3,19 @@ if not game:IsLoaded() then
 end
 
 local Players=game:GetService("Players")
-local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
-local PlayerGui=plr:WaitForChild("PlayerGui")
-
-local Players=game:GetService("Players")
-local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
-local PlayerGui=plr:WaitForChild("PlayerGui")
-
-local oldGui = PlayerGui:FindFirstChild("BlockVNHub")
-if oldGui then
-	oldGui:Destroy()
-end
-
 local RS=game:GetService("RunService")
 local Stats=game:GetService("Stats")
 local Lighting=game:GetService("Lighting")
 local HttpService=game:GetService("HttpService")
+local UIS=game:GetService("UserInputService")
+
+local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui=plr:WaitForChild("PlayerGui")
+
+local oldGui=PlayerGui:FindFirstChild("BlockVNHub")
+if oldGui then
+	oldGui:Destroy()
+end
 
 -- config
 local cfgFile="BlockVNHub.json"
@@ -36,7 +33,7 @@ local function saveCfg()
 	end
 end
 
--- tối ưu mặc định
+-- optimize
 settings().Rendering.QualityLevel=Enum.QualityLevel.Level01
 Lighting.GlobalShadows=false
 Lighting.FogEnd=9e9
@@ -48,47 +45,112 @@ gui.IgnoreGuiInset=true
 gui.ResetOnSpawn=false
 gui.Parent=PlayerGui
 
--- fps/ping
-local l=Instance.new("TextLabel",gui)
-l.Size=UDim2.new(0,200,0,30)
-l.Position=UDim2.new(0.5,-100,0,0)
+-- rainbow outlines
+local rainbowObjects={}
+
+local function addRainbowStroke(obj,thickness)
+	local stroke=Instance.new("UIStroke")
+	stroke.Thickness=thickness or 2
+	stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
+	stroke.Parent=obj
+
+	table.insert(rainbowObjects,stroke)
+	return stroke
+end
+
+-- fps/ping label
+local l=Instance.new("TextLabel")
+l.Parent=gui
+l.Size=UDim2.new(0,260,0,40)
+l.Position=UDim2.new(0.5,-130,0,0)
 l.BackgroundTransparency=1
 l.TextScaled=true
 l.Font=Enum.Font.SourceSansBold
+l.TextStrokeTransparency=0
+l.TextStrokeColor3=Color3.new(0,0,0)
 l.ZIndex=10
 
-local o={}
-for _,v in ipairs({
-	Vector2.new(-1,0),Vector2.new(1,0),
-	Vector2.new(0,-1),Vector2.new(0,1),
-	Vector2.new(-1,-1),Vector2.new(-1,1),
-	Vector2.new(1,-1),Vector2.new(1,1)
-}) do
-	local x=l:Clone()
-	x.Parent=gui
-	x.Position=l.Position+UDim2.new(0,v.X,0,v.Y)
-	x.TextColor3=Color3.new()
-	x.ZIndex=9
-	table.insert(o,x)
-end
-
--- nút lag
-local b1=Instance.new("TextButton",gui)
+-- lag button
+local b1=Instance.new("TextButton")
+b1.Parent=gui
 b1.Size=UDim2.new(0,100,0,35)
-b1.Position=UDim2.new(0.5,-100,0,35)
+b1.Position=UDim2.new(0.5,-100,0,45)
 b1.BackgroundColor3=Color3.fromRGB(40,40,40)
 b1.TextColor3=Color3.new(1,1,1)
 b1.TextScaled=true
 b1.Font=Enum.Font.SourceSansBold
+b1.Text="Lag: OFF"
 
--- nút bright
-local b2=Instance.new("TextButton",gui)
+addRainbowStroke(b1,2)
+
+-- bright button
+local b2=Instance.new("TextButton")
+b2.Parent=gui
 b2.Size=UDim2.new(0,100,0,35)
-b2.Position=UDim2.new(0.5,0,0,35)
+b2.Position=UDim2.new(0.5,0,0,45)
 b2.BackgroundColor3=Color3.fromRGB(40,40,40)
 b2.TextColor3=Color3.new(1,1,1)
 b2.TextScaled=true
 b2.Font=Enum.Font.SourceSansBold
+b2.Text="Bright: OFF"
+
+addRainbowStroke(b2,2)
+
+-- note
+local note=Instance.new("TextLabel")
+note.Parent=gui
+note.Size=UDim2.new(0,320,0,30)
+note.Position=UDim2.new(0.5,-160,0,85)
+note.BackgroundTransparency=1
+note.Text="Bấm Alt Trái / Left Alt để ẩn/hiện UI"
+note.TextScaled=true
+note.Font=Enum.Font.SourceSansBold
+note.TextColor3=Color3.new(1,1,1)
+note.TextStrokeTransparency=0
+note.TextStrokeColor3=Color3.new(0,0,0)
+note.ZIndex=10
+
+-- anti afk every 19 minutes
+task.spawn(function()
+	while true do
+		task.wait(1140) -- 19 minutes
+
+		pcall(function()
+			VirtualUser:CaptureController()
+			VirtualUser:ClickButton2(Vector2.new())
+		end)
+	end
+end)
+
+-- remove note after 5s
+task.delay(5,function()
+	for i=1,20 do
+		note.TextTransparency=i/20
+		note.TextStrokeTransparency=i/20
+		task.wait(0.05)
+	end
+
+	note:Destroy()
+end)
+
+-- hide/show ui
+local uiVisible=true
+
+UIS.InputBegan:Connect(function(input,gpe)
+	if gpe then
+		return
+	end
+
+	if input.KeyCode==Enum.KeyCode.LeftAlt then
+		uiVisible=not uiVisible
+
+		for _,v in ipairs(gui:GetChildren()) do
+			if v~=note then
+				v.Visible=uiVisible
+			end
+		end
+	end
+end)
 
 local saved={}
 local brightConn=nil
@@ -96,6 +158,7 @@ local brightConn=nil
 local function applyLow(state)
 	cfg.low=state
 	saveCfg()
+
 	b1.Text=state and "Lag: ON" or "Lag: OFF"
 
 	for _,v in ipairs(workspace:GetDescendants()) do
@@ -106,6 +169,7 @@ local function applyLow(state)
 			else
 				v.LocalTransparencyModifier=saved[v] or 0
 			end
+
 		elseif v:IsA("Decal") or v:IsA("Texture") then
 			if state then
 				saved[v]=v.Transparency
@@ -113,6 +177,7 @@ local function applyLow(state)
 			else
 				v.Transparency=saved[v] or 0
 			end
+
 		elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
 			if state then
 				saved[v]=v.Enabled
@@ -127,6 +192,7 @@ end
 local function applyBright(state)
 	cfg.bright=state
 	saveCfg()
+
 	b2.Text=state and "Bright: ON" or "Bright: OFF"
 
 	if state then
@@ -158,6 +224,7 @@ end)
 
 -- restore config
 task.wait(0.5)
+
 applyLow(cfg.low)
 applyBright(cfg.bright)
 
@@ -166,10 +233,12 @@ local fps,last,frames=0,tick(),0
 
 RS.RenderStepped:Connect(function()
 	frames+=1
+
 	local now=tick()
 
 	if now-last>=0.25 then
 		fps=math.floor(frames/(now-last))
+
 		frames=0
 		last=now
 
@@ -177,15 +246,15 @@ RS.RenderStepped:Connect(function()
 		local ping=tonumber(pingStr:match("%d+")) or 0
 
 		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
-		for _,x in ipairs(o) do
-			x.Text=l.Text
-		end
 	end
 
-	local s=now*2
-	l.TextColor3=Color3.new(
-		math.sin(s)*.5+.5,
-		math.sin(s+2)*.5+.5,
-		math.sin(s+4)*.5+.5
-	)
+	-- rainbow text
+	local rainbow=Color3.fromHSV((tick()%5)/5,1,1)
+
+	l.TextColor3=rainbow
+
+	-- rainbow outlines
+	for _,stroke in ipairs(rainbowObjects) do
+		stroke.Color=rainbow
+	end
 end)
