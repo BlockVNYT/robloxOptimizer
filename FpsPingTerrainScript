@@ -1,17 +1,49 @@
+if not game:IsLoaded() then
+	game.Loaded:Wait()
+end
+
+local Players=game:GetService("Players")
+local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui=plr:WaitForChild("PlayerGui")
+
+if PlayerGui:FindFirstChild("BlockVNHub") then
+	return
+end
+
 local RS=game:GetService("RunService")
 local Stats=game:GetService("Stats")
 local Lighting=game:GetService("Lighting")
-local plr=game.Players.LocalPlayer
+local HttpService=game:GetService("HttpService")
 
--- tối ưu thêm
+-- config
+local cfgFile="BlockVNHub.json"
+local cfg={low=false,bright=false}
+
+if isfile and isfile(cfgFile) then
+	pcall(function()
+		cfg=HttpService:JSONDecode(readfile(cfgFile))
+	end)
+end
+
+local function saveCfg()
+	if writefile then
+		writefile(cfgFile,HttpService:JSONEncode(cfg))
+	end
+end
+
+-- tối ưu mặc định
 settings().Rendering.QualityLevel=Enum.QualityLevel.Level01
 Lighting.GlobalShadows=false
 Lighting.FogEnd=9e9
 
-local gui=Instance.new("ScreenGui",plr.PlayerGui)
+-- gui
+local gui=Instance.new("ScreenGui")
+gui.Name="BlockVNHub"
 gui.IgnoreGuiInset=true
+gui.ResetOnSpawn=false
+gui.Parent=PlayerGui
 
--- FPS/PING
+-- fps/ping
 local l=Instance.new("TextLabel",gui)
 l.Size=UDim2.new(0,200,0,30)
 l.Position=UDim2.new(0.5,-100,0,0)
@@ -35,42 +67,49 @@ for _,v in ipairs({
 	table.insert(o,x)
 end
 
--- nút giảm lag
-local b=Instance.new("TextButton",gui)
-b.Size=UDim2.new(0,200,0,35)
-b.Position=UDim2.new(0.5,-100,0,35)
-b.Text="Giảm Lag: OFF"
-b.TextScaled=true
-b.Font=Enum.Font.SourceSansBold
-b.BackgroundColor3=Color3.fromRGB(40,40,40)
-b.TextColor3=Color3.new(1,1,1)
+-- nút lag
+local b1=Instance.new("TextButton",gui)
+b1.Size=UDim2.new(0,100,0,35)
+b1.Position=UDim2.new(0.5,-100,0,35)
+b1.BackgroundColor3=Color3.fromRGB(40,40,40)
+b1.TextColor3=Color3.new(1,1,1)
+b1.TextScaled=true
+b1.Font=Enum.Font.SourceSansBold
 
-local low=false
+-- nút bright
+local b2=Instance.new("TextButton",gui)
+b2.Size=UDim2.new(0,100,0,35)
+b2.Position=UDim2.new(0.5,0,0,35)
+b2.BackgroundColor3=Color3.fromRGB(40,40,40)
+b2.TextColor3=Color3.new(1,1,1)
+b2.TextScaled=true
+b2.Font=Enum.Font.SourceSansBold
+
 local saved={}
+local brightConn=nil
 
-b.MouseButton1Click:Connect(function()
-	low=not low
-	b.Text=low and "Giảm Lag: ON" or "Giảm Lag: OFF"
+local function applyLow(state)
+	cfg.low=state
+	saveCfg()
+	b1.Text=state and "Lag: ON" or "Lag: OFF"
 
 	for _,v in ipairs(workspace:GetDescendants()) do
 		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
-			if low then
+			if state then
 				saved[v]=v.LocalTransparencyModifier
 				v.LocalTransparencyModifier=1
 			else
 				v.LocalTransparencyModifier=saved[v] or 0
 			end
-
 		elseif v:IsA("Decal") or v:IsA("Texture") then
-			if low then
+			if state then
 				saved[v]=v.Transparency
 				v.Transparency=1
 			else
 				v.Transparency=saved[v] or 0
 			end
-
 		elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
-			if low then
+			if state then
 				saved[v]=v.Enabled
 				v.Enabled=false
 			else
@@ -78,9 +117,46 @@ b.MouseButton1Click:Connect(function()
 			end
 		end
 	end
+end
+
+local function applyBright(state)
+	cfg.bright=state
+	saveCfg()
+	b2.Text=state and "Bright: ON" or "Bright: OFF"
+
+	if state then
+		if not brightConn then
+			brightConn=RS.RenderStepped:Connect(function()
+				Lighting.Brightness=5
+				Lighting.ClockTime=14
+				Lighting.FogEnd=100000
+				Lighting.GlobalShadows=false
+				Lighting.Ambient=Color3.new(1,1,1)
+				Lighting.OutdoorAmbient=Color3.new(1,1,1)
+			end)
+		end
+	else
+		if brightConn then
+			brightConn:Disconnect()
+			brightConn=nil
+		end
+	end
+end
+
+b1.MouseButton1Click:Connect(function()
+	applyLow(not cfg.low)
 end)
 
--- update FPS/PING
+b2.MouseButton1Click:Connect(function()
+	applyBright(not cfg.bright)
+end)
+
+-- restore config
+task.wait(0.5)
+applyLow(cfg.low)
+applyBright(cfg.bright)
+
+-- fps/ping update
 local fps,last,frames=0,tick(),0
 
 RS.RenderStepped:Connect(function()
