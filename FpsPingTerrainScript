@@ -6,8 +6,13 @@ local Players=game:GetService("Players")
 local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
 local PlayerGui=plr:WaitForChild("PlayerGui")
 
-if PlayerGui:FindFirstChild("BlockVNHub") then
-	return
+local Players=game:GetService("Players")
+local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui=plr:WaitForChild("PlayerGui")
+
+local oldGui = PlayerGui:FindFirstChild("BlockVNHub")
+if oldGui then
+	oldGui:Destroy()
 end
 
 local RS=game:GetService("RunService")
