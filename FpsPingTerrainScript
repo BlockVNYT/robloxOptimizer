@@ -1,0 +1,93 @@
+local RS,plr,gui=game:GetService("RunService"),game.Players.LocalPlayer,Instance.new("ScreenGui",game.Players.LocalPlayer.PlayerGui)
+gui.IgnoreGuiInset=true
+
+-- FPS/PING
+local l=Instance.new("TextLabel",gui)
+l.Size=UDim2.new(0,200,0,30)
+l.Position=UDim2.new(0.5,-100,0,0)
+l.BackgroundTransparency=1
+l.TextScaled=true
+l.Font=Enum.Font.SourceSansBold
+l.ZIndex=10
+
+local o={}
+for _,v in ipairs({
+	Vector2.new(-1,0),Vector2.new(1,0),
+	Vector2.new(0,-1),Vector2.new(0,1),
+	Vector2.new(-1,-1),Vector2.new(-1,1),
+	Vector2.new(1,-1),Vector2.new(1,1)
+}) do
+	local x=l:Clone()
+	x.Parent=gui
+	x.Position=l.Position+UDim2.new(0,v.X,0,v.Y)
+	x.TextColor3=Color3.new()
+	x.ZIndex=9
+	table.insert(o,x)
+end
+
+-- NÚT GIẢM LAG
+local b=Instance.new("TextButton",gui)
+b.Size=UDim2.new(0,200,0,35)
+b.Position=UDim2.new(0.5,-100,0,35)
+b.Text="Giảm Lag: OFF"
+b.TextScaled=true
+b.Font=Enum.Font.SourceSansBold
+b.BackgroundColor3=Color3.fromRGB(40,40,40)
+b.TextColor3=Color3.new(1,1,1)
+
+local low=false
+local saved={}
+
+b.MouseButton1Click:Connect(function()
+	low=not low
+	b.Text=low and "Giảm Lag: ON" or "Giảm Lag: OFF"
+
+	for _,v in ipairs(workspace:GetDescendants()) do
+		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
+			if low then
+				saved[v]=v.LocalTransparencyModifier
+				v.LocalTransparencyModifier=1
+			else
+				v.LocalTransparencyModifier=saved[v] or 0
+			end
+
+		elseif v:IsA("Decal") or v:IsA("Texture") then
+			if low then
+				saved[v]=v.Transparency
+				v.Transparency=1
+			else
+				v.Transparency=saved[v] or 0
+			end
+
+		elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+			if low then
+				saved[v]=v.Enabled
+				v.Enabled=false
+			else
+				v.Enabled=saved[v]~=false
+			end
+		end
+	end
+end)
+
+-- FPS update
+local t,f=tick(),0
+RS.RenderStepped:Connect(function()
+	f+=1
+	if tick()-t>=1 then
+		local fps=f/(tick()-t)
+		t,f=tick(),0
+		local ping=math.floor(game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue())
+		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
+		for _,x in ipairs(o) do
+			x.Text=l.Text
+		end
+	end
+
+	local s=tick()*2
+	l.TextColor3=Color3.new(
+		math.sin(s)*.5+.5,
+		math.sin(s+2)*.5+.5,
+		math.sin(s+4)*.5+.5
+	)
+end)
