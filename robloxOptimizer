@@ -2,44 +2,44 @@ if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
-local Players=game:GetService("Players")
-local RS=game:GetService("RunService")
-local Stats=game:GetService("Stats")
-local Lighting=game:GetService("Lighting")
-local HttpService=game:GetService("HttpService")
-local UIS=game:GetService("UserInputService")
-local VirtualUser=game:GetService("VirtualUser")
+local Players = game:GetService("Players")
+local RS = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local Lighting = game:GetService("Lighting")
+local HttpService = game:GetService("HttpService")
+local UIS = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 
 if not getgenv().BlockVNOriginalLighting then
-	getgenv().BlockVNOriginalLighting={
-		Brightness=Lighting.Brightness,
-		ClockTime=Lighting.ClockTime,
-		FogEnd=Lighting.FogEnd,
-		GlobalShadows=Lighting.GlobalShadows,
-		Ambient=Lighting.Ambient,
-		OutdoorAmbient=Lighting.OutdoorAmbient,
-		ExposureCompensation=Lighting.ExposureCompensation
+	getgenv().BlockVNOriginalLighting = {
+		Brightness = Lighting.Brightness,
+		ClockTime = Lighting.ClockTime,
+		FogEnd = Lighting.FogEnd,
+		GlobalShadows = Lighting.GlobalShadows,
+		Ambient = Lighting.Ambient,
+		OutdoorAmbient = Lighting.OutdoorAmbient,
+		ExposureCompensation = Lighting.ExposureCompensation
 	}
 else
-	local old=getgenv().BlockVNOriginalLighting
-	Lighting.Brightness=old.Brightness
-	Lighting.ClockTime=old.ClockTime
-	Lighting.FogEnd=old.FogEnd
-	Lighting.GlobalShadows=old.GlobalShadows
-	Lighting.Ambient=old.Ambient
-	Lighting.OutdoorAmbient=old.OutdoorAmbient
-	Lighting.ExposureCompensation=old.ExposureCompensation
+	local old = getgenv().BlockVNOriginalLighting
+	Lighting.Brightness = old.Brightness
+	Lighting.ClockTime = old.ClockTime
+	Lighting.FogEnd = old.FogEnd
+	Lighting.GlobalShadows = old.GlobalShadows
+	Lighting.Ambient = old.Ambient
+	Lighting.OutdoorAmbient = old.OutdoorAmbient
+	Lighting.ExposureCompensation = old.ExposureCompensation
 end
 
-local plr=Players.LocalPlayer or Players.PlayerAdded:Wait()
-local PlayerGui=plr:WaitForChild("PlayerGui")
+local plr = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local PlayerGui = plr:WaitForChild("PlayerGui")
 
-local oldGui=PlayerGui:FindFirstChild("BlockVNHub")
+local oldGui = PlayerGui:FindFirstChild("BlockVNHub")
 if oldGui then oldGui:Destroy() end
 
 -- ─── HỆ THỐNG CẤU HÌNH (CONFIG) ──────────────────────────────────────────────
-local cfgFile="BlockVNHub_Config.json"
-local cfg={
+local cfgFile = "BlockVNHub_Config.json"
+local cfg = {
 	boostEnabled = false,
 	terrainEnabled = false,
 	lessVfxEnabled = false,
@@ -48,7 +48,6 @@ local cfg={
 	fpsPingEnabled = true
 }
 
--- Đọc cấu hình cũ nếu có dữ liệu đã lưu
 if isfile and isfile(cfgFile) then
 	pcall(function() 
 		local decoded = HttpService:JSONDecode(readfile(cfgFile)) 
@@ -60,7 +59,6 @@ if isfile and isfile(cfgFile) then
 	end)
 end
 
--- Hàm lưu cấu hình vào file
 local function saveCfg()
 	if writefile then 
 		pcall(function()
@@ -70,339 +68,345 @@ local function saveCfg()
 end
 -- ─────────────────────────────────────────────────────────────────────────────
 
-local gui=Instance.new("ScreenGui")
-gui.Name="BlockVNHub"
-gui.IgnoreGuiInset=true
-gui.ResetOnSpawn=false
-gui.Parent=PlayerGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "BlockVNHub"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
 
-local rainbowObjects={}
-local function addRainbowStroke(obj,thickness)
-	local stroke=Instance.new("UIStroke")
-	stroke.Thickness=thickness or 2
-	stroke.ApplyStrokeMode=Enum.ApplyStrokeMode.Border
-	stroke.Parent=obj
-	table.insert(rainbowObjects,stroke)
+local rainbowObjects = {}
+local function addRainbowStroke(obj, thickness)
+	local stroke = Instance.new("UIStroke")
+	stroke.Thickness = thickness or 2
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = obj
+	table.insert(rainbowObjects, stroke)
 	return stroke
 end
 
 -- FPS/Ping label
-local l=Instance.new("TextLabel")
-l.Parent=gui
-l.Size=UDim2.new(0,240,0,40)
-l.Position=UDim2.new(0.5,-120,0,0)
-l.BackgroundTransparency=1
-l.TextScaled=false
-l.TextSize=19
-l.Font=Enum.Font.SourceSansBold
-l.TextStrokeTransparency=0
-l.TextStrokeColor3=Color3.new(0,0,0)
-l.ZIndex=10
-l.Visible = cfg.fpsPingEnabled -- Áp dụng cấu hình FPS/Ping ban đầu
+local l = Instance.new("TextLabel")
+l.Parent = gui
+l.Size = UDim2.new(0, 240, 0, 40)
+l.Position = UDim2.new(0.5, -120, 0, 0)
+l.BackgroundTransparency = 1
+l.TextScaled = false
+l.TextSize = 19
+l.Font = Enum.Font.SourceSansBold
+l.TextStrokeTransparency = 0
+l.TextStrokeColor3 = Color3.new(0, 0, 0)
+l.ZIndex = 10
+l.Visible = cfg.fpsPingEnabled
 
 -- Reduce Lag button
-local b1=Instance.new("TextButton")
-b1.Parent=gui
-b1.Size=UDim2.new(0,140,0,35)
-b1.Position=UDim2.new(0.5,-120,0,45)
-b1.BackgroundColor3=Color3.fromRGB(40,40,40)
-b1.TextColor3=Color3.new(1,1,1)
-b1.TextScaled=false
-b1.TextSize=17
-b1.Font=Enum.Font.SourceSansBold
-b1.Text="Reduce Lag"
-addRainbowStroke(b1,2)
+local b1 = Instance.new("TextButton")
+b1.Parent = gui
+b1.Size = UDim2.new(0, 140, 0, 35)
+b1.Position = UDim2.new(0.5, -120, 0, 45)
+b1.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+b1.TextColor3 = Color3.new(1, 1, 1)
+b1.TextScaled = false
+b1.TextSize = 17
+b1.Font = Enum.Font.SourceSansBold
+b1.Text = "Reduce Lag"
+addRainbowStroke(b1, 2)
 
-local lagExpanded=false
+local lagExpanded = false
 
 -- Boost FPS sub-button
-local boostBtn=Instance.new("TextButton")
-boostBtn.Parent=gui
-boostBtn.Size=UDim2.new(0,150,0,30)
-boostBtn.Position=UDim2.new(0.5,-278,0,45)
-boostBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-boostBtn.TextColor3=Color3.new(1,1,1)
-boostBtn.TextScaled=false
-boostBtn.TextSize=16
-boostBtn.Font=Enum.Font.SourceSansBold
-boostBtn.Text="Boost FPS: OFF"
-boostBtn.Visible=false
-addRainbowStroke(boostBtn,2)
+local boostBtn = Instance.new("TextButton")
+boostBtn.Parent = gui
+boostBtn.Size = UDim2.new(0, 150, 0, 30)
+boostBtn.Position = UDim2.new(0.5, -278, 0, 45)
+boostBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+boostBtn.TextColor3 = Color3.new(1, 1, 1)
+boostBtn.TextScaled = false
+boostBtn.TextSize = 16
+boostBtn.Font = Enum.Font.SourceSansBold
+boostBtn.Text = "Boost FPS: OFF"
+boostBtn.Visible = false
+addRainbowStroke(boostBtn, 2)
 
 -- Remove Terrain sub-button
-local terrainBtn=Instance.new("TextButton")
-terrainBtn.Parent=gui
-terrainBtn.Size=UDim2.new(0,150,0,30)
-terrainBtn.Position=UDim2.new(0.5,-278,0,78)
-terrainBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-terrainBtn.TextColor3=Color3.new(1,1,1)
-terrainBtn.TextScaled=false
-terrainBtn.TextSize=16
-terrainBtn.Font=Enum.Font.SourceSansBold
-terrainBtn.Text="Remove Terrain: OFF"
-terrainBtn.Visible=false
-addRainbowStroke(terrainBtn,2)
+local terrainBtn = Instance.new("TextButton")
+terrainBtn.Parent = gui
+terrainBtn.Size = UDim2.new(0, 150, 0, 30)
+terrainBtn.Position = UDim2.new(0.5, -278, 0, 78)
+terrainBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+terrainBtn.TextColor3 = Color3.new(1, 1, 1)
+terrainBtn.TextScaled = false
+terrainBtn.TextSize = 16
+terrainBtn.Font = Enum.Font.SourceSansBold
+terrainBtn.Text = "Remove Terrain: OFF"
+terrainBtn.Visible = false
+addRainbowStroke(terrainBtn, 2)
 
 -- Less VFX sub-button
-local lessVfxBtn=Instance.new("TextButton")
-lessVfxBtn.Parent=gui
-lessVfxBtn.Size=UDim2.new(0,150,0,30)
-lessVfxBtn.Position=UDim2.new(0.5,-278,0,111)
-lessVfxBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-lessVfxBtn.TextColor3=Color3.new(1,1,1)
-lessVfxBtn.TextScaled=false
-lessVfxBtn.TextSize=16
-lessVfxBtn.Font=Enum.Font.SourceSansBold
-lessVfxBtn.Text="Less VFX: OFF"
-lessVfxBtn.Visible=false
-addRainbowStroke(lessVfxBtn,2)
+local lessVfxBtn = Instance.new("TextButton")
+lessVfxBtn.Parent = gui
+lessVfxBtn.Size = UDim2.new(0, 150, 0, 30)
+lessVfxBtn.Position = UDim2.new(0.5, -278, 0, 111)
+lessVfxBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+lessVfxBtn.TextColor3 = Color3.new(1, 1, 1)
+lessVfxBtn.TextScaled = false
+lessVfxBtn.TextSize = 16
+lessVfxBtn.Font = Enum.Font.SourceSansBold
+lessVfxBtn.Text = "Less VFX: OFF"
+lessVfxBtn.Visible = false
+addRainbowStroke(lessVfxBtn, 2)
 
 -- Mode button
-local modeExpanded=false
+local modeExpanded = false
 
-local b2=Instance.new("TextButton")
-b2.Parent=gui
-b2.Size=UDim2.new(0,100,0,35)
-b2.Position=UDim2.new(0.5,20,0,45)
-b2.BackgroundColor3=Color3.fromRGB(40,40,40)
-b2.TextColor3=Color3.new(1,1,1)
-b2.TextScaled=false
-b2.TextSize=17
-b2.Font=Enum.Font.SourceSansBold
-b2.Text="Mode: OFF"
-addRainbowStroke(b2,2)
+local b2 = Instance.new("TextButton")
+b2.Parent = gui
+b2.Size = UDim2.new(0, 100, 0, 35)
+b2.Position = UDim2.new(0.5, 20, 0, 45)
+b2.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+b2.TextColor3 = Color3.new(1, 1, 1)
+b2.TextScaled = false
+b2.TextSize = 17
+b2.Font = Enum.Font.SourceSansBold
+b2.Text = "Mode: OFF"
+addRainbowStroke(b2, 2)
 
 -- Mode sub-buttons
-local brightModeBtn=Instance.new("TextButton")
-brightModeBtn.Parent=gui
-brightModeBtn.Size=UDim2.new(0,120,0,30)
-brightModeBtn.Position=UDim2.new(0.5,128,0,45)
-brightModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-brightModeBtn.TextColor3=Color3.new(1,1,1)
-brightModeBtn.TextScaled=false
-brightModeBtn.TextSize=16
-brightModeBtn.Font=Enum.Font.SourceSansBold
-brightModeBtn.Text="Bright"
-brightModeBtn.Visible=false
-addRainbowStroke(brightModeBtn,2)
+local brightModeBtn = Instance.new("TextButton")
+brightModeBtn.Parent = gui
+brightModeBtn.Size = UDim2.new(0, 120, 0, 30)
+brightModeBtn.Position = UDim2.new(0.5, 128, 0, 45)
+brightModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+brightModeBtn.TextColor3 = Color3.new(1, 1, 1)
+brightModeBtn.TextScaled = false
+brightModeBtn.TextSize = 16
+brightModeBtn.Font = Enum.Font.SourceSansBold
+brightModeBtn.Text = "Bright"
+brightModeBtn.Visible = false
+addRainbowStroke(brightModeBtn, 2)
 
-local offModeBtn=Instance.new("TextButton")
-offModeBtn.Parent=gui
-offModeBtn.Size=UDim2.new(0,120,0,30)
-offModeBtn.Position=UDim2.new(0.5,128,0,78)
-offModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-offModeBtn.TextColor3=Color3.new(1,1,1)
-offModeBtn.TextScaled=false
-offModeBtn.TextSize=16
-offModeBtn.Font=Enum.Font.SourceSansBold
-offModeBtn.Text="Off"
-offModeBtn.Visible=false
-addRainbowStroke(offModeBtn,2)
+local offModeBtn = Instance.new("TextButton")
+offModeBtn.Parent = gui
+offModeBtn.Size = UDim2.new(0, 120, 0, 30)
+offModeBtn.Position = UDim2.new(0.5, 128, 0, 78)
+offModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+offModeBtn.TextColor3 = Color3.new(1, 1, 1)
+offModeBtn.TextScaled = false
+offModeBtn.TextSize = 16
+offModeBtn.Font = Enum.Font.SourceSansBold
+offModeBtn.Text = "Off"
+offModeBtn.Visible = false
+addRainbowStroke(offModeBtn, 2)
 
-local darkModeBtn=Instance.new("TextButton")
-darkModeBtn.Parent=gui
-darkModeBtn.Size=UDim2.new(0,120,0,30)
-darkModeBtn.Position=UDim2.new(0.5,128,0,111)
-darkModeBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-darkModeBtn.TextColor3=Color3.new(1,1,1)
-darkModeBtn.TextScaled=false
-darkModeBtn.TextSize=16
-darkModeBtn.Font=Enum.Font.SourceSansBold
-darkModeBtn.Text="Dark"
-darkModeBtn.Visible=false
-addRainbowStroke(darkModeBtn,2)
+local darkModeBtn = Instance.new("TextButton")
+darkModeBtn.Parent = gui
+darkModeBtn.Size = UDim2.new(0, 120, 0, 30)
+darkModeBtn.Position = UDim2.new(0.5, 128, 0, 111)
+darkModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+darkModeBtn.TextColor3 = Color3.new(1, 1, 1)
+darkModeBtn.TextScaled = false
+darkModeBtn.TextSize = 16
+darkModeBtn.Font = Enum.Font.SourceSansBold
+darkModeBtn.Text = "Dark"
+darkModeBtn.Visible = false
+addRainbowStroke(darkModeBtn, 2)
 
 -- Effect row
-local minusBtn=Instance.new("TextButton")
-minusBtn.Parent=gui
-minusBtn.Size=UDim2.new(0,35,0,35)
-minusBtn.Position=UDim2.new(0.5,-120,0,85)
-minusBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
-minusBtn.TextColor3=Color3.new(1,1,1)
-minusBtn.TextScaled=false
-minusBtn.TextSize=20
-minusBtn.Font=Enum.Font.SourceSansBold
-minusBtn.Text="-"
-addRainbowStroke(minusBtn,2)
+local minusBtn = Instance.new("TextButton")
+minusBtn.Parent = gui
+minusBtn.Size = UDim2.new(0, 35, 0, 35)
+minusBtn.Position = UDim2.new(0.5, -120, 0, 85)
+minusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+minusBtn.TextColor3 = Color3.new(1, 1, 1)
+minusBtn.TextScaled = false
+minusBtn.TextSize = 20
+minusBtn.Font = Enum.Font.SourceSansBold
+minusBtn.Text = "-"
+addRainbowStroke(minusBtn, 2)
 
-local effectAdjust=Instance.new("TextButton")
-effectAdjust.Parent=gui
-effectAdjust.Size=UDim2.new(0,170,0,35)
-effectAdjust.Position=UDim2.new(0.5,-85,0,85)
-effectAdjust.BackgroundColor3=Color3.fromRGB(40,40,40)
-effectAdjust.TextColor3=Color3.new(1,1,1)
-effectAdjust.TextScaled=false
-effectAdjust.TextSize=17
-effectAdjust.Font=Enum.Font.SourceSansBold
-effectAdjust.Text="Effect: OFF"
-addRainbowStroke(effectAdjust,2)
+local effectAdjust = Instance.new("TextButton")
+effectAdjust.Parent = gui
+effectAdjust.Size = UDim2.new(0, 170, 0, 35)
+effectAdjust.Position = UDim2.new(0.5, -85, 0, 85)
+effectAdjust.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+effectAdjust.TextColor3 = Color3.new(1, 1, 1)
+effectAdjust.TextScaled = false
+effectAdjust.TextSize = 17
+effectAdjust.Font = Enum.Font.SourceSansBold
+effectAdjust.Text = "Effect: OFF"
+addRainbowStroke(effectAdjust, 2)
 
-local plusBtn=Instance.new("TextButton")
-plusBtn.Parent=gui
-plusBtn.Size=UDim2.new(0,35,0,35)
-plusBtn.Position=UDim2.new(0.5,85,0,85)
-plusBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
-plusBtn.TextColor3=Color3.new(1,1,1)
-plusBtn.TextScaled=false
-plusBtn.TextSize=20
-plusBtn.Font=Enum.Font.SourceSansBold
-plusBtn.Text="+"
-addRainbowStroke(plusBtn,2)
+local plusBtn = Instance.new("TextButton")
+plusBtn.Parent = gui
+plusBtn.Size = UDim2.new(0, 35, 0, 35)
+plusBtn.Position = UDim2.new(0.5, 85, 0, 85)
+plusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+plusBtn.TextColor3 = Color3.new(1, 1, 1)
+plusBtn.TextScaled = false
+plusBtn.TextSize = 20
+plusBtn.Font = Enum.Font.SourceSansBold
+plusBtn.Text = "+"
+addRainbowStroke(plusBtn, 2)
 
 -- Server Options button
-local serverMainBtn=Instance.new("TextButton")
-serverMainBtn.Parent=gui
-serverMainBtn.Size=UDim2.new(0,240,0,35)
-serverMainBtn.Position=UDim2.new(0.5,-120,0,125)
-serverMainBtn.BackgroundColor3=Color3.fromRGB(40,40,40)
-serverMainBtn.TextColor3=Color3.new(1,1,1)
-serverMainBtn.TextScaled=false
-serverMainBtn.TextSize=17
-serverMainBtn.Font=Enum.Font.SourceSansBold
-serverMainBtn.Text="Server Options"
-addRainbowStroke(serverMainBtn,2)
+local serverMainBtn = Instance.new("TextButton")
+serverMainBtn.Parent = gui
+serverMainBtn.Size = UDim2.new(0, 240, 0, 35)
+serverMainBtn.Position = UDim2.new(0.5, -120, 0, 125)
+serverMainBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+serverMainBtn.TextColor3 = Color3.new(1, 1, 1)
+serverMainBtn.TextScaled = false
+serverMainBtn.TextSize = 17
+serverMainBtn.Font = Enum.Font.SourceSansBold
+serverMainBtn.Text = "Server Options"
+addRainbowStroke(serverMainBtn, 2)
 
-local serverExpanded=false
+local serverExpanded = false
 
 -- Hop Server sub-button
-local TeleportService=game:GetService("TeleportService")
-local hopBtn=Instance.new("TextButton")
-hopBtn.Parent=gui
-hopBtn.Size=UDim2.new(0,150,0,30)
-hopBtn.Position=UDim2.new(0.5,-278,0,144)
-hopBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-hopBtn.TextColor3=Color3.new(1,1,1)
-hopBtn.TextScaled=false
-hopBtn.TextSize=16
-hopBtn.Font=Enum.Font.SourceSansBold
-hopBtn.Text="Hop Server"
-hopBtn.Visible=false
-addRainbowStroke(hopBtn,2)
+local TeleportService = game:GetService("TeleportService")
+local hopBtn = Instance.new("TextButton")
+hopBtn.Parent = gui
+hopBtn.Size = UDim2.new(0, 150, 0, 30)
+hopBtn.Position = UDim2.new(0.5, -278, 0, 144)
+hopBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+hopBtn.TextColor3 = Color3.new(1, 1, 1)
+hopBtn.TextScaled = false
+hopBtn.TextSize = 16
+hopBtn.Font = Enum.Font.SourceSansBold
+hopBtn.Text = "Hop Server"
+hopBtn.Visible = false
+addRainbowStroke(hopBtn, 2)
 
 -- Rejoin sub-button
-local rejoinBtn=Instance.new("TextButton")
-rejoinBtn.Parent=gui
-rejoinBtn.Size=UDim2.new(0,150,0,30)
-rejoinBtn.Position=UDim2.new(0.5,-278,0,177)
-rejoinBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-rejoinBtn.TextColor3=Color3.new(1,1,1)
-rejoinBtn.TextScaled=false
-rejoinBtn.TextSize=16
-rejoinBtn.Font=Enum.Font.SourceSansBold
-rejoinBtn.Text="Rejoin Server"
-rejoinBtn.Visible=false
-addRainbowStroke(rejoinBtn,2)
+local rejoinBtn = Instance.new("TextButton")
+rejoinBtn.Parent = gui
+rejoinBtn.Size = UDim2.new(0, 150, 0, 30)
+rejoinBtn.Position = UDim2.new(0.5, -278, 0, 177)
+rejoinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+rejoinBtn.TextColor3 = Color3.new(1, 1, 1)
+rejoinBtn.TextScaled = false
+rejoinBtn.TextSize = 16
+rejoinBtn.Font = Enum.Font.SourceSansBold
+rejoinBtn.Text = "Rejoin Server"
+rejoinBtn.Visible = false
+addRainbowStroke(rejoinBtn, 2)
 
 -- Show FPS/Ping sub-button
-local fpsToggleBtn=Instance.new("TextButton")
-fpsToggleBtn.Parent=gui
-fpsToggleBtn.Size=UDim2.new(0,150,0,30)
-fpsToggleBtn.Position=UDim2.new(0.5,-278,0,210)
-fpsToggleBtn.BackgroundColor3=cfg.fpsPingEnabled and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
-fpsToggleBtn.TextColor3=Color3.new(1,1,1)
-fpsToggleBtn.TextScaled=false
-fpsToggleBtn.TextSize=16
-fpsToggleBtn.Font=Enum.Font.SourceSansBold
-fpsToggleBtn.Text=cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
-fpsToggleBtn.Visible=false
-addRainbowStroke(fpsToggleBtn,2)
+local fpsToggleBtn = Instance.new("TextButton")
+fpsToggleBtn.Parent = gui
+fpsToggleBtn.Size = UDim2.new(0, 150, 0, 30)
+fpsToggleBtn.Position = UDim2.new(0.5, -278, 0, 210)
+fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
+fpsToggleBtn.TextColor3 = Color3.new(1, 1, 1)
+fpsToggleBtn.TextScaled = false
+fpsToggleBtn.TextSize = 16
+fpsToggleBtn.Font = Enum.Font.SourceSansBold
+fpsToggleBtn.Text = cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
+fpsToggleBtn.Visible = false
+addRainbowStroke(fpsToggleBtn, 2)
 
 -- Note
-local note=Instance.new("TextLabel")
-note.Parent=gui
-note.Size=UDim2.new(0,320,0,30)
-note.Position=UDim2.new(0.5,-160,0,165)
-note.BackgroundTransparency=1
-note.Text="Bấm Alt Trái / Left Alt để ẩn/hiện UI"
-note.TextScaled=false
-note.TextSize=16
-note.Font=Enum.Font.SourceSansBold
-note.TextColor3=Color3.new(1,1,1)
-note.TextStrokeTransparency=0
-note.TextStrokeColor3=Color3.new(0,0,0)
+local note = Instance.new("TextLabel")
+note.Parent = gui
+note.Size = UDim2.new(0, 320, 0, 30)
+note.Position = UDim2.new(0.5, -160, 0, 165)
+note.BackgroundTransparency = 1
+note.Text = "Bấm Alt Trái / Left Alt để ẩn/hiện UI"
+note.TextScaled = false
+note.TextSize = 16
+note.Font = Enum.Font.SourceSansBold
+note.TextColor3 = Color3.new(1, 1, 1)
+note.TextStrokeTransparency = 0
+note.TextStrokeColor3 = Color3.new(0, 0, 0)
 
 -- Draggable
-local drag=false
+local drag = false
 local dragInput
 local dragStart
 local startPos
 
-local draggableObjects={
-	l,b1,b2,
-	boostBtn,terrainBtn,lessVfxBtn,
-	brightModeBtn,offModeBtn,darkModeBtn,
-	minusBtn,effectAdjust,plusBtn,
-	serverMainBtn,hopBtn,rejoinBtn,fpsToggleBtn,
+local draggableObjects = {
+	l, b1, b2,
+	boostBtn, terrainBtn, lessVfxBtn,
+	brightModeBtn, offModeBtn, darkModeBtn,
+	minusBtn, effectAdjust, plusBtn,
+	serverMainBtn, hopBtn, rejoinBtn, fpsToggleBtn,
 	note
 }
 
 local function updateDrag(input)
-	local delta=input.Position-dragStart
-	for _,obj in ipairs(draggableObjects) do
-		obj.Position=UDim2.new(
-			startPos[obj].X.Scale,
-			startPos[obj].X.Offset+delta.X,
-			startPos[obj].Y.Scale,
-			startPos[obj].Y.Offset+delta.Y
-		)
+	local delta = input.Position - dragStart
+	for _, obj in ipairs(draggableObjects) do
+		if obj and obj.Parent then
+			obj.Position = UDim2.new(
+				startPos[obj].X.Scale,
+				startPos[obj].X.Offset + delta.X,
+				startPos[obj].Y.Scale,
+				startPos[obj].Y.Offset + delta.Y
+			)
+		end
 	end
 end
 
 l.InputBegan:Connect(function(input)
-	if input.UserInputType==Enum.UserInputType.MouseButton1 then
-		drag=true
-		dragStart=input.Position
-		startPos={}
-		for _,obj in ipairs(draggableObjects) do startPos[obj]=obj.Position end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		drag = true
+		dragStart = input.Position
+		startPos = {}
+		for _, obj in ipairs(draggableObjects) do 
+			if obj and obj.Parent then startPos[obj] = obj.Position end 
+		end
 		input.Changed:Connect(function()
-			if input.UserInputState==Enum.UserInputState.End then drag=false end
+			if input.UserInputState == Enum.UserInputState.End then drag = false end
 		end)
 	end
 end)
 
 l.InputChanged:Connect(function(input)
-	if input.UserInputType==Enum.UserInputType.MouseMovement then dragInput=input end
+	if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
 end)
 
 UIS.InputChanged:Connect(function(input)
-	if drag and input==dragInput then updateDrag(input) end
+	if drag and input == dragInput then updateDrag(input) end
 end)
 
 -- Note fade
-task.delay(5,function()
-	for i=1,20 do
-		note.TextTransparency=i/20
-		note.TextStrokeTransparency=i/20
-		task.wait(0.05)
+task.delay(5, function()
+	for i = 1, 20 do
+		if note and note.Parent then
+			note.TextTransparency = i / 20
+			note.TextStrokeTransparency = i / 20
+			task.wait(0.05)
+		end
 	end
-	note:Destroy()
+	if note and note.Parent then note:Destroy() end
 end)
 
 -- Alt hide/show
-local uiVisible=true
-UIS.InputBegan:Connect(function(input,gpe)
+local uiVisible = true
+UIS.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
-	if input.KeyCode==Enum.KeyCode.LeftAlt then
-		uiVisible=not uiVisible
+	if input.KeyCode == Enum.KeyCode.LeftAlt then
+		uiVisible = not uiVisible
 		if uiVisible then
-			b1.Visible=true
-			b2.Visible=true
-			minusBtn.Visible=true
-			effectAdjust.Visible=true
-			plusBtn.Visible=true
-			serverMainBtn.Visible=true
-			boostBtn.Visible=lagExpanded
-			terrainBtn.Visible=lagExpanded
-			lessVfxBtn.Visible=lagExpanded
-			brightModeBtn.Visible=modeExpanded
-			offModeBtn.Visible=modeExpanded
-			darkModeBtn.Visible=modeExpanded
-			hopBtn.Visible=serverExpanded
-			rejoinBtn.Visible=serverExpanded
-			fpsToggleBtn.Visible=serverExpanded
+			b1.Visible = true
+			b2.Visible = true
+			minusBtn.Visible = true
+			effectAdjust.Visible = true
+			plusBtn.Visible = true
+			serverMainBtn.Visible = true
+			boostBtn.Visible = lagExpanded
+			terrainBtn.Visible = lagExpanded
+			lessVfxBtn.Visible = lagExpanded
+			brightModeBtn.Visible = modeExpanded
+			offModeBtn.Visible = modeExpanded
+			darkModeBtn.Visible = modeExpanded
+			hopBtn.Visible = serverExpanded
+			rejoinBtn.Visible = serverExpanded
+			fpsToggleBtn.Visible = serverExpanded
 		else
-			for _,v in ipairs(gui:GetChildren()) do
-				if v~=note and v~=l then v.Visible=false end
+			for _, v in ipairs(gui:GetChildren()) do
+				if v ~= note and v ~= l then v.Visible = false end
 			end
 		end
 	end
@@ -414,37 +418,37 @@ plr.Idled:Connect(function()
 	VirtualUser:ClickButton2(Vector2.new())
 end)
 
-local savedBoost={}
-local savedTerrain={}
+local savedBoost = {}
+local savedTerrain = {}
 
-local brightConn=nil
+local brightConn = nil
 
 local function updateEffectText()
-	if cfg.modeIndex==1 then
-		effectAdjust.Text="Brightness: "..cfg.effectLevel
-	elseif cfg.modeIndex==3 then
-		effectAdjust.Text="Darkness: "..cfg.effectLevel
+	if cfg.modeIndex == 1 then
+		effectAdjust.Text = "Brightness: " .. cfg.effectLevel
+	elseif cfg.modeIndex == 3 then
+		effectAdjust.Text = "Darkness: " .. cfg.effectLevel
 	else
-		effectAdjust.Text="Effect: OFF"
+		effectAdjust.Text = "Effect: OFF"
 	end
 end
 
 local function updateModeHighlight()
-	brightModeBtn.BackgroundColor3=cfg.modeIndex==1
-		and Color3.fromRGB(60,60,20) or Color3.fromRGB(30,30,30)
-	offModeBtn.BackgroundColor3=cfg.modeIndex==2
-		and Color3.fromRGB(20,60,20) or Color3.fromRGB(30,30,30)
-	darkModeBtn.BackgroundColor3=cfg.modeIndex==3
-		and Color3.fromRGB(20,20,60) or Color3.fromRGB(30,30,30)
+	brightModeBtn.BackgroundColor3 = cfg.modeIndex == 1
+		and Color3.fromRGB(60, 60, 20) or Color3.fromRGB(30, 30, 30)
+	offModeBtn.BackgroundColor3 = cfg.modeIndex == 2
+		and Color3.fromRGB(20, 60, 20) or Color3.fromRGB(30, 30, 30)
+	darkModeBtn.BackgroundColor3 = cfg.modeIndex == 3
+		and Color3.fromRGB(20, 20, 60) or Color3.fromRGB(30, 30, 30)
 end
 
 -- ─── Less VFX ────────────────────────────────────────────────────────────────
-local vfxSaved={}
-local vfxConn=nil
+local vfxSaved = {}
+local vfxConn = nil
 
 local function isOtherCharacter(v)
-	for _,p in ipairs(Players:GetPlayers()) do
-		if p~=plr and p.Character and v:IsDescendantOf(p.Character) then
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= plr and p.Character and v:IsDescendantOf(p.Character) then
 			return true
 		end
 	end
@@ -462,243 +466,236 @@ local function isVFXType(v)
 end
 
 local function isShadowCaster(v)
-	return v:IsA("BasePart") or v:IsA("UnionOperation") or v:IsA("MeshPart") or v:IsA("SpecialMesh")
+	return v:IsA("BasePart") or v:IsA("UnionOperation") or v:IsA("MeshPart")
 end
 
 local function applyVfxToObject(v)
 	if not cfg.lessVfxEnabled then return end
 
-	local char=plr.Character
+	local char = plr.Character
 	if isVFXType(v) and (not char or not v:IsDescendantOf(char)) then
-		if vfxSaved[v]==nil then
-			vfxSaved[v]=v.Enabled
-		end
-		v.Enabled=false
-
-	elseif isShadowCaster(v)
-		and (not char or not v:IsDescendantOf(char)) then
-		if vfxSaved[v]==nil then
-			vfxSaved[v]=v.CastShadow
-		end
-		v.CastShadow=false
-
+		if vfxSaved[v] == nil then vfxSaved[v] = v.Enabled end
+		v.Enabled = false
+	elseif isShadowCaster(v) and (not char or not v:IsDescendantOf(char)) then
+		if vfxSaved[v] == nil then vfxSaved[v] = v.CastShadow end
+		v.CastShadow = false
 	elseif (v:IsA("Decal") or v:IsA("Texture")) and isOtherCharacter(v) then
-		if vfxSaved[v]==nil then
-			vfxSaved[v]=v.Transparency
-		end
-		v.Transparency=1
-
-	elseif v:IsA("BasePart") and v.Name=="Handle" and isOtherCharacter(v) then
-		if vfxSaved[v]==nil then
-			vfxSaved[v]=v.LocalTransparencyModifier
-		end
-		v.LocalTransparencyModifier=1
+		if vfxSaved[v] == nil then vfxSaved[v] = v.Transparency end
+		v.Transparency = 1
+	elseif v:IsA("BasePart") and v.Name == "Handle" and isOtherCharacter(v) then
+		if vfxSaved[v] == nil then vfxSaved[v] = v.LocalTransparencyModifier end
+		v.LocalTransparencyModifier = 1
 	end
 end
 
 local function applyLessVFX(state)
-	cfg.lessVfxEnabled=state
-	saveCfg() -- Lưu config
-	lessVfxBtn.Text=state and "Less VFX: ON" or "Less VFX: OFF"
-	lessVfxBtn.BackgroundColor3=state
-		and Color3.fromRGB(80,20,20) or Color3.fromRGB(30,30,30)
+	cfg.lessVfxEnabled = state
+	saveCfg()
+	lessVfxBtn.Text = state and "Less VFX: ON" or "Less VFX: OFF"
+	lessVfxBtn.BackgroundColor3 = state and Color3.fromRGB(80, 20, 20) or Color3.fromRGB(30, 30, 30)
 
 	if state then
-		Lighting.GlobalShadows=false
-
-		for _,v in ipairs(workspace:GetDescendants()) do
+		Lighting.GlobalShadows = false
+		for _, v in ipairs(workspace:GetDescendants()) do
 			applyVfxToObject(v)
 		end
-
-		vfxConn=workspace.DescendantAdded:Connect(function(v)
-			task.defer(applyVfxToObject,v)
-		end)
-	else
-		if vfxConn then
-			vfxConn:Disconnect()
-			vfxConn=nil
-		end
-
-		for v,original in pairs(vfxSaved) do
-			pcall(function()
-				if isVFXType(v) then
-					v.Enabled=original
-				elseif isShadowCaster(v) then
-					v.CastShadow=original
-				elseif v:IsA("Decal") or v:IsA("Texture") then
-					v.Transparency=original
-				elseif v:IsA("BasePart") then
-					v.LocalTransparencyModifier=original
-				end
+		if not vfxConn then
+			vfxConn = workspace.DescendantAdded:Connect(function(v)
+				task.defer(applyVfxToObject, v)
 			end)
 		end
-
-		vfxSaved={}
-		Lighting.GlobalShadows=getgenv().BlockVNOriginalLighting.GlobalShadows
+	else
+		if vfxConn then vfxConn:Disconnect() vfxConn = nil end
+		for v, original in pairs(vfxSaved) do
+			pcall(function()
+				if isVFXType(v) then v.Enabled = original
+				elseif isShadowCaster(v) then v.CastShadow = original
+				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original
+				elseif v:IsA("BasePart") then v.LocalTransparencyModifier = original end
+			end)
+		end
+		vfxSaved = {}
+		Lighting.GlobalShadows = getgenv().BlockVNOriginalLighting.GlobalShadows
 	end
 end
--- ─────────────────────────────────────────────────────────────────────────────
+
+-- ─── Boost FPS & Remove Terrain Fix Realtime Spawning ─────────────────────────
+local boostConn = nil
+local terrainConn = nil
+
+local function checkAndApplyBoostToObject(v)
+	if not cfg.boostEnabled then return end
+	if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
+		if not savedBoost[v] then savedBoost[v] = v.Material end
+		v.Material = Enum.Material.SmoothPlastic
+		v.Reflectance = 0
+	elseif v:IsA("Decal") or v:IsA("Texture") then
+		if not savedBoost[v] then savedBoost[v] = v.Transparency end
+		v.Transparency = 1
+	elseif isVFXType(v) then
+		if not savedBoost[v] then savedBoost[v] = v.Enabled end
+		v.Enabled = false
+	end
+end
+
+local function checkAndApplyTerrainToObject(v)
+	if not cfg.terrainEnabled then return end
+	if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
+		if not savedTerrain[v] then savedTerrain[v] = v.LocalTransparencyModifier end
+		v.LocalTransparencyModifier = 1
+	elseif v:IsA("Decal") or v:IsA("Texture") then
+		if not savedTerrain[v] then savedTerrain[v] = v.Transparency end
+		v.Transparency = 1
+	end
+end
 
 local function applyBoostFPS(state)
-	cfg.boostEnabled=state
-	saveCfg() -- Lưu config
-	boostBtn.Text=state and "Boost FPS: ON" or "Boost FPS: OFF"
-	boostBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
+	cfg.boostEnabled = state
+	saveCfg()
+	boostBtn.Text = state and "Boost FPS: ON" or "Boost FPS: OFF"
+	boostBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
 
 	local terrain = workspace:FindFirstChildOfClass("Terrain")
 	if terrain then
 		for _, mat in ipairs(Enum.Material:GetEnumItems()) do
 			pcall(function()
-				if state then
-					terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50))
-				else
-					terrain:ResetMaterialColor(mat)
-				end
+				if state then terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50))
+				else terrain:ResetMaterialColor(mat) end
 			end)
 		end
 	end
 
-	for _,v in ipairs(workspace:GetDescendants()) do
-		if v:IsA("Terrain") then
-			if state then
-				v.WaterWaveSize=0
-				v.WaterWaveSpeed=0
-				v.WaterReflectance=0
-				v.WaterTransparency=1
-			end
-		elseif v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
-			if state then
-				if not savedBoost[v] then savedBoost[v]=v.Material end
-				v.Material=Enum.Material.SmoothPlastic
-				v.Reflectance=0
-			else
-				if savedBoost[v] then v.Material=savedBoost[v] end
-			end
-		elseif v:IsA("Decal") or v:IsA("Texture") then
-			if state then
-				if not savedBoost[v] then savedBoost[v]=v.Transparency end
-				v.Transparency=1
-			else
-				if savedBoost[v] then v.Transparency=savedBoost[v] end
-			end
-		elseif v:IsA("ParticleEmitter") or v:IsA("Trail")
-			or v:IsA("Smoke") or v:IsA("Fire") or v:IsA("Sparkles") then
-			if state then
-				if not savedBoost[v] then savedBoost[v]=v.Enabled end
-				v.Enabled=false
-			else
-				if savedBoost[v]~=nil then v.Enabled=savedBoost[v] end
-			end
+	if state then
+		-- Áp dụng cho các Part hiện tại
+		for _, v in ipairs(workspace:GetDescendants()) do
+			checkAndApplyBoostToObject(v)
 		end
+		-- Lắng nghe xem có Part nào mới sinh ra không thì xử lý luôn
+		if not boostConn then
+			boostConn = workspace.DescendantAdded:Connect(function(v)
+				task.defer(checkAndApplyBoostToObject, v)
+			end)
+		end
+	else
+		if boostConn then boostConn:Disconnect() boostConn = nil end
+		for v, original in pairs(savedBoost) do
+			pcall(function()
+				if v:IsA("BasePart") then v.Material = original
+				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original
+				elseif isVFXType(v) then v.Enabled = original end
+			end)
+		end
+		savedBoost = {}
 	end
-	if not state then savedBoost={} end
 end
 
 local function applyRemoveTerrain(state)
-	cfg.terrainEnabled=state
-	saveCfg() -- Lưu config
-	terrainBtn.Text=state and "Remove Terrain: ON" or "Remove Terrain: OFF"
-	terrainBtn.BackgroundColor3=state and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
-	for _,v in ipairs(workspace:GetDescendants()) do
-		if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
-			if state then
-				if not savedTerrain[v] then savedTerrain[v]=v.LocalTransparencyModifier end
-				v.LocalTransparencyModifier=1
-			else
-				if savedTerrain[v] then v.LocalTransparencyModifier=savedTerrain[v] end
-			end
-		elseif v:IsA("Decal") or v:IsA("Texture") then
-			if state then
-				if not savedTerrain[v] then savedTerrain[v]=v.Transparency end
-				v.Transparency=1
-			else
-				if savedTerrain[v] then v.Transparency=savedTerrain[v] end
-			end
+	cfg.terrainEnabled = state
+	saveCfg()
+	terrainBtn.Text = state and "Remove Terrain: ON" or "Remove Terrain: OFF"
+	terrainBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
+
+	if state then
+		-- Áp dụng cho các Part hiện tại
+		for _, v in ipairs(workspace:GetDescendants()) do
+			checkAndApplyTerrainToObject(v)
 		end
+		-- Lắng nghe xem có Part nào mới sinh ra không thì xử lý luôn
+		if not terrainConn then
+			terrainConn = workspace.DescendantAdded:Connect(function(v)
+				task.defer(checkAndApplyTerrainToObject, v)
+			end)
+		end
+	else
+		if terrainConn then terrainConn:Disconnect() terrainConn = nil end
+		for v, original in pairs(savedTerrain) do
+			pcall(function()
+				if v:IsA("BasePart") then v.LocalTransparencyModifier = original
+				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original end
+			end)
+		end
+		savedTerrain = {}
 	end
-	if not state then savedTerrain={} end
 end
 
 local function applyBright(mode)
-	if brightConn then brightConn:Disconnect() brightConn=nil end
-	cfg.modeIndex=mode
-	saveCfg() -- Lưu config
+	if brightConn then brightConn:Disconnect() brightConn = nil end
+	cfg.modeIndex = mode
+	saveCfg()
 	updateEffectText()
 	updateModeHighlight()
-	if mode==1 then
-		b2.Text="Mode: BRIGHT"
-		brightConn=RS.RenderStepped:Connect(function()
-			local intensity=math.clamp(cfg.effectLevel,1,10)
-			Lighting.ClockTime=14
-			Lighting.FogEnd=100000
-			Lighting.GlobalShadows=false
-			Lighting.Brightness=1+(intensity*0.45)
-			local ambient=0.2+(intensity*0.075)
-			Lighting.Ambient=Color3.new(ambient,ambient,ambient)
-			Lighting.OutdoorAmbient=Color3.new(ambient,ambient,ambient)
-			Lighting.ExposureCompensation=intensity*0.22
+	if mode == 1 then
+		b2.Text = "Mode: BRIGHT"
+		brightConn = RS.RenderStepped:Connect(function()
+			local intensity = math.clamp(cfg.effectLevel, 1, 10)
+			Lighting.ClockTime = 14
+			Lighting.FogEnd = 100000
+			Lighting.GlobalShadows = false
+			Lighting.Brightness = 1 + (intensity * 0.45)
+			local ambient = 0.2 + (intensity * 0.075)
+			Lighting.Ambient = Color3.new(ambient, ambient, ambient)
+			Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
+			Lighting.ExposureCompensation = intensity * 0.22
 		end)
-	elseif mode==2 then
-		b2.Text="Mode: OFF"
-		local old=getgenv().BlockVNOriginalLighting
-		Lighting.Brightness=old.Brightness
-		Lighting.ClockTime=old.ClockTime
-		Lighting.FogEnd=old.FogEnd
-		Lighting.GlobalShadows=cfg.lessVfxEnabled and false or old.GlobalShadows
-		Lighting.Ambient=old.Ambient
-		Lighting.OutdoorAmbient=old.OutdoorAmbient
-		Lighting.ExposureCompensation=old.ExposureCompensation
-	elseif mode==3 then
-		b2.Text="Mode: DARK"
-		brightConn=RS.RenderStepped:Connect(function()
-			local darkness=math.clamp(cfg.effectLevel,1,10)
-			Lighting.ClockTime=0
-			Lighting.GlobalShadows=not cfg.lessVfxEnabled
-			Lighting.FogEnd=3000-(darkness*260)
-			Lighting.Brightness=1.5-(darkness*0.13)
-			local ambient=math.clamp(0.6-(darkness*0.055),0,1)
-			Lighting.Ambient=Color3.new(ambient,ambient,ambient)
-			Lighting.OutdoorAmbient=Color3.new(ambient,ambient,ambient)
-			Lighting.ExposureCompensation=-(darkness*0.28)
+	elseif mode == 2 then
+		b2.Text = "Mode: OFF"
+		local old = getgenv().BlockVNOriginalLighting
+		Lighting.Brightness = old.Brightness
+		Lighting.ClockTime = old.ClockTime
+		Lighting.FogEnd = old.FogEnd
+		Lighting.GlobalShadows = cfg.lessVfxEnabled and false or old.GlobalShadows
+		Lighting.Ambient = old.Ambient
+		Lighting.OutdoorAmbient = old.OutdoorAmbient
+		Lighting.ExposureCompensation = old.ExposureCompensation
+	elseif mode == 3 then
+		b2.Text = "Mode: DARK"
+		brightConn = RS.RenderStepped:Connect(function()
+			local darkness = math.clamp(cfg.effectLevel, 1, 10)
+			Lighting.ClockTime = 0
+			Lighting.GlobalShadows = not cfg.lessVfxEnabled
+			Lighting.FogEnd = 3000 - (darkness * 260)
+			Lighting.Brightness = 1.5 - (darkness * 0.13)
+			local ambient = math.clamp(0.6 - (darkness * 0.055), 0, 1)
+			Lighting.Ambient = Color3.new(ambient, ambient, ambient)
+			Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
+			Lighting.ExposureCompensation = -(darkness * 0.28)
 		end)
 	end
 end
 
 -- Button logic
 b1.MouseButton1Click:Connect(function()
-	lagExpanded=not lagExpanded
-	boostBtn.Visible=lagExpanded
-	terrainBtn.Visible=lagExpanded
-	lessVfxBtn.Visible=lagExpanded
+	lagExpanded = not lagExpanded
+	boostBtn.Visible = lagExpanded
+	terrainBtn.Visible = lagExpanded
+	lessVfxBtn.Visible = lagExpanded
 end)
 
--- Server Options Click logic
 serverMainBtn.MouseButton1Click:Connect(function()
-	serverExpanded=not serverExpanded
-	hopBtn.Visible=serverExpanded
-	rejoinBtn.Visible=serverExpanded
-	fpsToggleBtn.Visible=serverExpanded
+	serverExpanded = not serverExpanded
+	hopBtn.Visible = serverExpanded
+	rejoinBtn.Visible = serverExpanded
+	fpsToggleBtn.Visible = serverExpanded
 end)
 
--- Hop Server logic
-local isHopping=false
+local isHopping = false
 hopBtn.MouseButton1Click:Connect(function()
 	if isHopping then return end
-	isHopping=true
-	hopBtn.Text="Hopping..."
-	hopBtn.BackgroundColor3=Color3.fromRGB(20,60,20)
+	isHopping = true
+	hopBtn.Text = "Hopping..."
+	hopBtn.BackgroundColor3 = Color3.fromRGB(20, 60, 20)
 
-	local success=false
+	local success = false
 	pcall(function()
-		local servers=HttpService:JSONDecode(game:HttpGet(
-			"https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"
+		local servers = HttpService:JSONDecode(game:HttpGet(
+			"https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
 		))
 		if servers and servers.data then
-			local current=game.JobId
-			for _,s in ipairs(servers.data) do
-				if s.id~=current and s.playing<s.maxPlayers then
-					TeleportService:TeleportToPlaceInstance(game.PlaceId,s.id,plr)
-					success=true
+			local current = game.JobId
+			for _, s in ipairs(servers.data) do
+				if s.id ~= current and s.playing < s.maxPlayers then
+					TeleportService:TeleportToPlaceInstance(game.PlaceId, s.id, plr)
+					success = true
 					break
 				end
 			end
@@ -706,19 +703,18 @@ hopBtn.MouseButton1Click:Connect(function()
 	end)
 
 	if not success then
-		hopBtn.Text="No Server Found!"
-		hopBtn.BackgroundColor3=Color3.fromRGB(80,20,20)
+		hopBtn.Text = "No Server Found!"
+		hopBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
 		task.wait(2)
-		hopBtn.Text="Hop Server"
-		hopBtn.BackgroundColor3=Color3.fromRGB(30,30,30)
-		isHopping=false
+		hopBtn.Text = "Hop Server"
+		hopBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+		isHopping = false
 	end
 end)
 
--- Rejoin Server logic
 rejoinBtn.MouseButton1Click:Connect(function()
-	rejoinBtn.Text="Rejoining..."
-	rejoinBtn.BackgroundColor3=Color3.fromRGB(20,60,20)
+	rejoinBtn.Text = "Rejoining..."
+	rejoinBtn.BackgroundColor3 = Color3.fromRGB(20, 60, 20)
 	pcall(function()
 		if #Players:GetPlayers() <= 1 then
 			TeleportService:Teleport(game.PlaceId, plr)
@@ -728,13 +724,12 @@ rejoinBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- Show/Hide FPS/Ping độc lập hoàn toàn
 fpsToggleBtn.MouseButton1Click:Connect(function()
 	cfg.fpsPingEnabled = not cfg.fpsPingEnabled
-	saveCfg() -- Lưu trạng thái nút FPS/Ping
+	saveCfg()
 	l.Visible = cfg.fpsPingEnabled
 	fpsToggleBtn.Text = cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
-	fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20,80,20) or Color3.fromRGB(30,30,30)
+	fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
 end)
 
 boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not cfg.boostEnabled) end)
@@ -742,10 +737,10 @@ terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not cfg.terra
 lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not cfg.lessVfxEnabled) end)
 
 b2.MouseButton1Click:Connect(function()
-	modeExpanded=not modeExpanded
-	brightModeBtn.Visible=modeExpanded
-	offModeBtn.Visible=modeExpanded
-	darkModeBtn.Visible=modeExpanded
+	modeExpanded = not modeExpanded
+	brightModeBtn.Visible = modeExpanded
+	offModeBtn.Visible = modeExpanded
+	darkModeBtn.Visible = modeExpanded
 end)
 
 brightModeBtn.MouseButton1Click:Connect(function() applyBright(1) end)
@@ -753,17 +748,17 @@ offModeBtn.MouseButton1Click:Connect(function() applyBright(2) end)
 darkModeBtn.MouseButton1Click:Connect(function() applyBright(3) end)
 
 plusBtn.MouseButton1Click:Connect(function()
-	cfg.effectLevel=math.min(cfg.effectLevel+1,10)
+	cfg.effectLevel = math.min(cfg.effectLevel + 1, 10)
 	saveCfg()
 	updateEffectText()
 end)
 minusBtn.MouseButton1Click:Connect(function()
-	cfg.effectLevel=math.max(cfg.effectLevel-1,1)
+	cfg.effectLevel = math.max(cfg.effectLevel - 1, 1)
 	saveCfg()
 	updateEffectText()
 end)
 
--- Init (Tự động áp dụng lại config cũ khi chạy script ở server mới)
+-- Init
 task.wait(0.5)
 applyBoostFPS(cfg.boostEnabled)
 applyRemoveTerrain(cfg.terrainEnabled)
@@ -771,26 +766,38 @@ applyLessVFX(cfg.lessVfxEnabled)
 applyBright(cfg.modeIndex)
 updateModeHighlight()
 
--- FPS/Ping loop
-local fps,last,frames=0,tick(),0
+-- FPS/Ping loop (Được tối ưu nhẹ, giảm tải RenderStepped)
+local fps, last, frames = 0, tick(), 0
 RS.RenderStepped:Connect(function()
-	frames+=1
-	local now=tick()
-	if now-last>=0.25 then
-		fps=math.floor(frames/(now-last))
-		frames=0
-		last=now
-		local ping=0
+	frames += 1
+	local now = tick()
+	if now - last >= 0.25 then
+		fps = math.floor(frames / (now - last))
+		frames = 0
+		last = now
+		local ping = 0
 		pcall(function()
-			local pingStr=Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
-			local num=pingStr:match("(%d+%.?%d*)")
-			ping=num and math.floor(tonumber(num)) or 0
+			local pingStr = Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+			local num = pingStr:match("(%d+%.?%d*)")
+			ping = num and math.floor(tonumber(num)) or 0
 		end)
-		l.Text=("FPS: %d | Ping: %d ms"):format(fps,ping)
+		l.Text = ("FPS: %d | Ping: %d ms"):format(fps, ping)
 	end
-	local rainbow=Color3.fromHSV((tick()%5)/5,1,1)
-	l.TextColor3=rainbow
-	for _,stroke in ipairs(rainbowObjects) do
-		stroke.Color=rainbow
+	l.TextColor3 = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+end)
+
+-- Luồng đổi màu Rainbow riêng cho các Stroke (Mượt mà 30FPS, giảm lag cực tốt)
+task.spawn(function()
+	while gui and gui.Parent do
+		local rainbow = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+		for i = #rainbowObjects, 1, -1 do
+			local stroke = rainbowObjects[i]
+			if stroke and stroke.Parent then
+				stroke.Color = rainbow
+			else
+				table.remove(rainbowObjects, i) -- Tự dọn dẹp bộ nhớ nếu UI bị hủy
+			end
+		end
+		task.wait(0.03)
 	end
 end)
