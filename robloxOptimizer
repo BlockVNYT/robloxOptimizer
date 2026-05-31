@@ -43,6 +43,7 @@ local cfg = {
 	boostEnabled = false,
 	terrainEnabled = false,
 	lessVfxEnabled = false,
+	hidePlayersEnabled = false, 
 	modeIndex = 2,         -- 1: Bright, 2: Off, 3: Dark
 	effectLevel = 5,
 	fpsPingEnabled = true
@@ -141,11 +142,25 @@ terrainBtn.Text = "Remove Terrain: OFF"
 terrainBtn.Visible = false
 addRainbowStroke(terrainBtn, 2)
 
+-- Hide Players sub-button
+local hidePlayersBtn = Instance.new("TextButton")
+hidePlayersBtn.Parent = gui
+hidePlayersBtn.Size = UDim2.new(0, 150, 0, 30)
+hidePlayersBtn.Position = UDim2.new(0.5, -278, 0, 111) 
+hidePlayersBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+hidePlayersBtn.TextColor3 = Color3.new(1, 1, 1)
+hidePlayersBtn.TextScaled = false
+hidePlayersBtn.TextSize = 16
+hidePlayersBtn.Font = Enum.Font.SourceSansBold
+hidePlayersBtn.Text = "Hide All Players: OFF"
+hidePlayersBtn.Visible = false
+addRainbowStroke(hidePlayersBtn, 2)
+
 -- Less VFX sub-button
 local lessVfxBtn = Instance.new("TextButton")
 lessVfxBtn.Parent = gui
 lessVfxBtn.Size = UDim2.new(0, 150, 0, 30)
-lessVfxBtn.Position = UDim2.new(0.5, -278, 0, 111)
+lessVfxBtn.Position = UDim2.new(0.5, -278, 0, 144)
 lessVfxBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 lessVfxBtn.TextColor3 = Color3.new(1, 1, 1)
 lessVfxBtn.TextScaled = false
@@ -267,7 +282,7 @@ local TeleportService = game:GetService("TeleportService")
 local hopBtn = Instance.new("TextButton")
 hopBtn.Parent = gui
 hopBtn.Size = UDim2.new(0, 150, 0, 30)
-hopBtn.Position = UDim2.new(0.5, -278, 0, 144)
+hopBtn.Position = UDim2.new(0.5, 128, 0, 144) 
 hopBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 hopBtn.TextColor3 = Color3.new(1, 1, 1)
 hopBtn.TextScaled = false
@@ -281,7 +296,7 @@ addRainbowStroke(hopBtn, 2)
 local rejoinBtn = Instance.new("TextButton")
 rejoinBtn.Parent = gui
 rejoinBtn.Size = UDim2.new(0, 150, 0, 30)
-rejoinBtn.Position = UDim2.new(0.5, -278, 0, 177)
+rejoinBtn.Position = UDim2.new(0.5, 128, 0, 177)
 rejoinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 rejoinBtn.TextColor3 = Color3.new(1, 1, 1)
 rejoinBtn.TextScaled = false
@@ -295,7 +310,7 @@ addRainbowStroke(rejoinBtn, 2)
 local fpsToggleBtn = Instance.new("TextButton")
 fpsToggleBtn.Parent = gui
 fpsToggleBtn.Size = UDim2.new(0, 150, 0, 30)
-fpsToggleBtn.Position = UDim2.new(0.5, -278, 0, 210)
+fpsToggleBtn.Position = UDim2.new(0.5, 128, 0, 210)
 fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
 fpsToggleBtn.TextColor3 = Color3.new(1, 1, 1)
 fpsToggleBtn.TextScaled = false
@@ -327,7 +342,7 @@ local startPos
 
 local draggableObjects = {
 	l, b1, b2,
-	boostBtn, terrainBtn, lessVfxBtn,
+	boostBtn, terrainBtn, hidePlayersBtn, lessVfxBtn,
 	brightModeBtn, offModeBtn, darkModeBtn,
 	minusBtn, effectAdjust, plusBtn,
 	serverMainBtn, hopBtn, rejoinBtn, fpsToggleBtn,
@@ -397,6 +412,7 @@ UIS.InputBegan:Connect(function(input, gpe)
 			serverMainBtn.Visible = true
 			boostBtn.Visible = lagExpanded
 			terrainBtn.Visible = lagExpanded
+			hidePlayersBtn.Visible = lagExpanded
 			lessVfxBtn.Visible = lagExpanded
 			brightModeBtn.Visible = modeExpanded
 			offModeBtn.Visible = modeExpanded
@@ -440,6 +456,106 @@ local function updateModeHighlight()
 		and Color3.fromRGB(20, 60, 20) or Color3.fromRGB(30, 30, 30)
 	darkModeBtn.BackgroundColor3 = cfg.modeIndex == 3
 		and Color3.fromRGB(20, 20, 60) or Color3.fromRGB(30, 30, 30)
+end
+
+-- ─── FIX TRIỆT ĐỂ LỖI KHÔNG HIỆN LẠI PLAYER KHI TẮT ─────────────────────────
+local hideConn = nil
+local savedPlayersTransparency = {} 
+
+local function applyHideToCharacter(character)
+	if not character or not character:IsDescendantOf(workspace) then return end
+
+	for _, part in ipairs(character:GetDescendants()) do
+		if part:IsA("BasePart") or part:IsA("Decal") then
+			-- Loại trừ các thành phần hệ thống ẩn sẵn của Roblox (ví dụ: khối va chạm Root)
+			if part.Name == "HumanoidRootPart" or part.Name == "CollisionPart" then
+				if cfg.hidePlayersEnabled then
+					part.Transparency = 1
+				end
+			else
+				if cfg.hidePlayersEnabled then
+					-- Lưu thuộc tính trong suốt gốc trước khi ẩn ẩn hoàn toàn (1)
+					if savedPlayersTransparency[part] == nil then
+						savedPlayersTransparency[part] = part.Transparency
+					end
+					part.Transparency = 1
+				else
+					-- Khi TẮT: Trả về độ trong suốt gốc. Nếu mất dữ liệu tạm, ép về 0 (Hiển thị hoàn toàn)
+					if savedPlayersTransparency[part] ~= nil then
+						part.Transparency = savedPlayersTransparency[part]
+					else
+						part.Transparency = 0
+					end
+				end
+			end
+		elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
+			part.Enabled = not cfg.hidePlayersEnabled
+		end
+	end
+end
+
+local function applyHidePlayers(state)
+	cfg.hidePlayersEnabled = state
+	saveCfg()
+	hidePlayersBtn.Text = state and "Hide All Players: ON" or "Hide All Players: OFF"
+	hidePlayersBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
+
+	-- Thực thi quét toàn server ngay lập tức
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p.Character then
+			applyHideToCharacter(p.Character)
+		end
+	end
+
+	if state then
+		if not hideConn then
+			hideConn = workspace.DescendantAdded:Connect(function(v)
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p.Character and v:IsDescendantOf(p.Character) then
+						task.defer(function()
+							if v:IsA("BasePart") or v:IsA("Decal") then
+								if v.Name ~= "HumanoidRootPart" then
+									if savedPlayersTransparency[v] == nil then
+										savedPlayersTransparency[v] = v.Transparency
+									end
+								end
+								v.Transparency = 1
+							end
+						end)
+						break
+					end
+				end
+			end)
+		end
+	else
+		if hideConn then hideConn:Disconnect() hideConn = nil end
+		-- Dọn dẹp bảng nhớ tạm sau khi đã khôi phục thành công các nhân vật
+		task.delay(0.2, function()
+			savedPlayersTransparency = {}
+		end)
+	end
+end
+
+-- Tự động đồng bộ khi người chơi khác hồi sinh / vào phòng
+Players.PlayerAdded:Connect(function(p)
+	p.CharacterAdded:Connect(function(char)
+		task.wait(0.5) 
+		applyHideToCharacter(char)
+	end)
+end)
+
+if plr then
+	plr.CharacterAdded:Connect(function(char)
+		task.wait(0.5)
+		applyHideToCharacter(char)
+	end)
+end
+
+for _, p in ipairs(Players:GetPlayers()) do
+	p.CharacterAdded:Connect(function(char)
+		task.wait(0.5)
+		applyHideToCharacter(char)
+	end)
 end
 
 -- ─── Less VFX ────────────────────────────────────────────────────────────────
@@ -566,11 +682,9 @@ local function applyBoostFPS(state)
 	end
 
 	if state then
-		-- Áp dụng cho các Part hiện tại
 		for _, v in ipairs(workspace:GetDescendants()) do
 			checkAndApplyBoostToObject(v)
 		end
-		-- Lắng nghe xem có Part nào mới sinh ra không thì xử lý luôn
 		if not boostConn then
 			boostConn = workspace.DescendantAdded:Connect(function(v)
 				task.defer(checkAndApplyBoostToObject, v)
@@ -596,11 +710,9 @@ local function applyRemoveTerrain(state)
 	terrainBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
 
 	if state then
-		-- Áp dụng cho các Part hiện tại
 		for _, v in ipairs(workspace:GetDescendants()) do
 			checkAndApplyTerrainToObject(v)
 		end
-		-- Lắng nghe xem có Part nào mới sinh ra không thì xử lý luôn
 		if not terrainConn then
 			terrainConn = workspace.DescendantAdded:Connect(function(v)
 				task.defer(checkAndApplyTerrainToObject, v)
@@ -668,6 +780,7 @@ b1.MouseButton1Click:Connect(function()
 	lagExpanded = not lagExpanded
 	boostBtn.Visible = lagExpanded
 	terrainBtn.Visible = lagExpanded
+	hidePlayersBtn.Visible = lagExpanded 
 	lessVfxBtn.Visible = lagExpanded
 end)
 
@@ -734,6 +847,7 @@ end)
 
 boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not cfg.boostEnabled) end)
 terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not cfg.terrainEnabled) end)
+hidePlayersBtn.MouseButton1Click:Connect(function() applyHidePlayers(not cfg.hidePlayersEnabled) end) 
 lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not cfg.lessVfxEnabled) end)
 
 b2.MouseButton1Click:Connect(function()
@@ -758,15 +872,22 @@ minusBtn.MouseButton1Click:Connect(function()
 	updateEffectText()
 end)
 
--- Init
-task.wait(0.5)
-applyBoostFPS(cfg.boostEnabled)
-applyRemoveTerrain(cfg.terrainEnabled)
-applyLessVFX(cfg.lessVfxEnabled)
-applyBright(cfg.modeIndex)
-updateModeHighlight()
+-- ─── HỆ THỐNG AN TOÀN KHI KHỞI CHẠY (INIT) ──────────────────────────────────
+task.spawn(function()
+	if plr and not plr.Character then
+		plr.CharacterAdded:Wait()
+	end
+	task.wait(0.6)
 
--- FPS/Ping loop (Được tối ưu nhẹ, giảm tải RenderStepped)
+	applyBoostFPS(cfg.boostEnabled)
+	applyRemoveTerrain(cfg.terrainEnabled)
+	applyHidePlayers(cfg.hidePlayersEnabled) 
+	applyLessVFX(cfg.lessVfxEnabled)
+	applyBright(cfg.modeIndex)
+	updateModeHighlight()
+end)
+
+-- FPS/Ping loop
 local fps, last, frames = 0, tick(), 0
 RS.RenderStepped:Connect(function()
 	frames += 1
@@ -786,7 +907,7 @@ RS.RenderStepped:Connect(function()
 	l.TextColor3 = Color3.fromHSV((tick() % 5) / 5, 1, 1)
 end)
 
--- Luồng đổi màu Rainbow riêng cho các Stroke (Mượt mà 30FPS, giảm lag cực tốt)
+-- Rainbow Stroke Loop
 task.spawn(function()
 	while gui and gui.Parent do
 		local rainbow = Color3.fromHSV((tick() % 5) / 5, 1, 1)
@@ -795,9 +916,9 @@ task.spawn(function()
 			if stroke and stroke.Parent then
 				stroke.Color = rainbow
 			else
-				table.remove(rainbowObjects, i) -- Tự dọn dẹp bộ nhớ nếu UI bị hủy
+				table.remove(rainbowObjects, i)
 			end
 		end
 		task.wait(0.03)
 	end
-end)
+end) 
