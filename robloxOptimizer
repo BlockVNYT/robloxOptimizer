@@ -1,1003 +1,1523 @@
-if not game:IsLoaded() then
-	game.Loaded:Wait()
-end
+--[[
+    BlopVNHub - optimized executor / Roblox client utility
+    Features:
+      - FPS / Ping monitor
+      - Boost FPS
+      - Remove Terrain (client-side world hiding)
+      - Hide Players
+      - Less VFX
+      - Bright / Off / Dark lighting
+      - Server Hop / Hop Less / Rejoin
+      - Anti-AFK
+      - Made by hxmanh - bolopvn
+]]
 
+if not game:IsLoaded() then
+    game.Loaded:Wait()
+end
+print("Script Made By hxmanh - BolopVN")
+--// Services
 local Players = game:GetService("Players")
-local RS = game:GetService("RunService")
+local RunService = game:GetService("RunService")
 local Stats = game:GetService("Stats")
 local Lighting = game:GetService("Lighting")
 local HttpService = game:GetService("HttpService")
-local UIS = game:GetService("UserInputService")
-local VirtualUser = game:GetService("VirtualUser")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
 
-if not getgenv().BlockVNOriginalLighting then
-	getgenv().BlockVNOriginalLighting = {
-		Brightness = Lighting.Brightness,
-		ClockTime = Lighting.ClockTime,
-		FogEnd = Lighting.FogEnd,
-		GlobalShadows = Lighting.GlobalShadows,
-		Ambient = Lighting.Ambient,
-		OutdoorAmbient = Lighting.OutdoorAmbient,
-		ExposureCompensation = Lighting.ExposureCompensation
-	}
-else
-	local old = getgenv().BlockVNOriginalLighting
-	Lighting.Brightness = old.Brightness
-	Lighting.ClockTime = old.ClockTime
-	Lighting.FogEnd = old.FogEnd
-	Lighting.GlobalShadows = old.GlobalShadows
-	Lighting.Ambient = old.Ambient
-	Lighting.OutdoorAmbient = old.OutdoorAmbient
-	Lighting.ExposureCompensation = old.ExposureCompensation
+--// Executor/global environment compatibility
+local getGlobalEnv = getgenv or function()
+    return _G
 end
 
-local plr = Players.LocalPlayer or Players.PlayerAdded:Wait()
-local PlayerGui = plr:WaitForChild("PlayerGui")
+local ENV = getGlobalEnv()
 
-local oldGui = PlayerGui:FindFirstChild("BlockVNHub")
-if oldGui then oldGui:Destroy() end
+--// Cleanup previous instance before starting a new one.
+if type(ENV.BlockVNHubCleanup) == "function" then
+    pcall(ENV.BlockVNHubCleanup)
+end
 
--- ─── HỆ THỐNG CẤU HÌNH (CONFIG) ──────────────────────────────────────────────
-local cfgFile = "BlockVNHub_Config.json"
-local cfg = {
-	boostEnabled = false,
-	terrainEnabled = false,
-	lessVfxEnabled = false,
-	hidePlayersEnabled = false, 
-	modeIndex = 2,          -- 1: Bright, 2: Off, 3: Dark
-	effectLevel = 5,
-	fpsPingEnabled = true
+--// Constants
+local GUI_NAME = "BlockVNHub"
+local CONFIG_FILE = "BlockVNHub_Config.json"
+local VALID_MODES = { [1] = true, [2] = true, [3] = true }
+
+--// Connection manager
+local connections = {}
+
+local function connect(signal, callback)
+    local connection = signal:Connect(callback)
+    table.insert(connections, connection)
+    return connection
+end
+
+local function disconnect(connection)
+    if connection then
+        pcall(function()
+            connection:Disconnect()
+        end)
+    end
+end
+
+local function disconnectAll()
+    for i = #connections, 1, -1 do
+        disconnect(connections[i])
+        connections[i] = nil
+    end
+end
+
+--// Original Lighting snapshot.
+--// Kept in the executor global env so a rerun can restore the previous game state.
+local originalLighting = ENV.BlockVNOriginalLighting
+
+if type(originalLighting) ~= "table" then
+    originalLighting = {
+        Brightness = Lighting.Brightness,
+        ClockTime = Lighting.ClockTime,
+        FogEnd = Lighting.FogEnd,
+        GlobalShadows = Lighting.GlobalShadows,
+        Ambient = Lighting.Ambient,
+        OutdoorAmbient = Lighting.OutdoorAmbient,
+        ExposureCompensation = Lighting.ExposureCompensation,
+    }
+
+    ENV.BlockVNOriginalLighting = originalLighting
+else
+    -- Restore the snapshot before making a fresh set of changes.
+    pcall(function()
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.Ambient = originalLighting.Ambient
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+        Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    end)
+end
+
+--// Player / GUI
+local player = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local playerGui = player:WaitForChild("PlayerGui")
+
+local oldGui = playerGui:FindFirstChild(GUI_NAME)
+if oldGui then
+    oldGui:Destroy()
+end
+
+--// Config
+local config = {
+    boostEnabled = false,
+    terrainEnabled = false,
+    lessVfxEnabled = false,
+    hidePlayersEnabled = false,
+    modeIndex = 2, -- 1 Bright, 2 Off, 3 Dark
+    effectLevel = 5,
+    fpsPingEnabled = true,
 }
 
-if isfile and isfile(cfgFile) then
-	pcall(function() 
-		local decoded = HttpService:JSONDecode(readfile(cfgFile)) 
-		if decoded and type(decoded) == "table" then
-			for k, v in pairs(decoded) do
-				cfg[k] = v
-			end
-		end
-	end)
+local function getExecutorFunction(name)
+    local value = ENV[name]
+    if type(value) == "function" then
+        return value
+    end
+
+    value = rawget(_G, name)
+    return type(value) == "function" and value or nil
 end
 
-local function saveCfg()
-	if writefile then 
-		pcall(function()
-			writefile(cfgFile, HttpService:JSONEncode(cfg)) 
-		end)
-	end
-end
--- ─────────────────────────────────────────────────────────────────────────────
+local function loadConfig()
+    local isfileFn = getExecutorFunction("isfile")
+    local readfileFn = getExecutorFunction("readfile")
 
+    if not isfileFn or not readfileFn then
+        return
+    end
+
+    local ok, exists = pcall(isfileFn, CONFIG_FILE)
+    if not ok or not exists then
+        return
+    end
+
+    local success, raw = pcall(readfileFn, CONFIG_FILE)
+    if not success or type(raw) ~= "string" then
+        return
+    end
+
+    local decodeOk, decoded = pcall(HttpService.JSONDecode, HttpService, raw)
+    if not decodeOk or type(decoded) ~= "table" then
+        return
+    end
+
+    for key, value in pairs(decoded) do
+        if config[key] ~= nil and typeof(value) == typeof(config[key]) then
+            config[key] = value
+        end
+    end
+
+    config.modeIndex = VALID_MODES[config.modeIndex] and config.modeIndex or 2
+    config.effectLevel = math.clamp(tonumber(config.effectLevel) or 5, 1, 10)
+end
+
+local saveQueued = false
+
+local function writeConfig()
+    local writefileFn = getExecutorFunction("writefile")
+    if not writefileFn then
+        return
+    end
+
+    pcall(function()
+        writefileFn(CONFIG_FILE, HttpService:JSONEncode(config))
+    end)
+end
+
+local function saveConfig()
+    -- Avoid multiple file writes during rapid button presses.
+    if saveQueued then
+        return
+    end
+
+    saveQueued = true
+
+    task.delay(0.15, function()
+        saveQueued = false
+
+        if type(ENV.BlockVNHubCleanup) ~= "function" then
+            return
+        end
+
+        writeConfig()
+    end)
+end
+
+loadConfig()
+
+--// Generic state storage
+local savedBoost = {}
+local savedTerrain = {}
+local savedVfx = {}
+local savedHiddenPlayers = {}
+local savedTerrainColors = {}
+
+local function rememberProperty(storage, instance, property)
+    local entry = storage[instance]
+    if not entry then
+        entry = {}
+        storage[instance] = entry
+    end
+
+    if entry[property] == nil then
+        local ok, value = pcall(function()
+            return instance[property]
+        end)
+
+        if ok then
+            entry[property] = value
+        end
+    end
+end
+
+local function restoreStorage(storage)
+    for instance, properties in pairs(storage) do
+        if instance and instance.Parent then
+            for property, originalValue in pairs(properties) do
+                pcall(function()
+                    instance[property] = originalValue
+                end)
+            end
+        end
+    end
+
+    table.clear(storage)
+end
+
+--// UI
 local gui = Instance.new("ScreenGui")
-gui.Name = "BlockVNHub"
+gui.Name = GUI_NAME
 gui.IgnoreGuiInset = true
 gui.ResetOnSpawn = false
-gui.Parent = PlayerGui
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
 
-local rainbowObjects = {}
-local function addRainbowStroke(obj, thickness)
-	local stroke = Instance.new("UIStroke")
-	stroke.Thickness = thickness or 2
-	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Parent = obj
-	table.insert(rainbowObjects, stroke)
-	return stroke
+local root = Instance.new("Frame")
+root.Name = "Root"
+root.Size = UDim2.fromOffset(570, 290)
+root.Position = UDim2.new(0.5, -285, 0, 10)
+root.BackgroundTransparency = 1
+root.BorderSizePixel = 0
+root.Parent = gui
+
+local function addStroke(instance, thickness)
+    local stroke = Instance.new("UIStroke")
+    stroke.Thickness = thickness or 2
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Parent = instance
+    return stroke
 end
 
--- FPS/Ping label
-local l = Instance.new("TextLabel")
-l.Parent = gui
-l.Size = UDim2.new(0, 240, 0, 40)
-l.Position = UDim2.new(0.5, -120, 0, 0)
-l.BackgroundTransparency = 1
-l.TextScaled = false
-l.TextSize = 19
-l.Font = Enum.Font.SourceSansBold
-l.TextStrokeTransparency = 0
-l.TextStrokeColor3 = Color3.new(0, 0, 0)
-l.ZIndex = 10
-l.Visible = cfg.fpsPingEnabled
+local rainbowStrokes = {}
 
--- Reduce Lag button
-local b1 = Instance.new("TextButton")
-b1.Parent = gui
-b1.Size = UDim2.new(0, 140, 0, 35)
-b1.Position = UDim2.new(0.5, -120, 0, 45)
-b1.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-b1.TextColor3 = Color3.new(1, 1, 1)
-b1.TextScaled = false
-b1.TextSize = 17
-b1.Font = Enum.Font.SourceSansBold
-b1.Text = "Reduce Lag"
-addRainbowStroke(b1, 2)
+local function addRainbowStroke(instance, thickness)
+    local stroke = addStroke(instance, thickness)
+    table.insert(rainbowStrokes, stroke)
+    return stroke
+end
 
-local lagExpanded = false
+local function createButton(name, text, position, size, fontSize)
+    local button = Instance.new("TextButton")
+    button.Name = name
+    button.Size = size or UDim2.fromOffset(150, 30)
+    button.Position = position
+    button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    button.TextColor3 = Color3.new(1, 1, 1)
+    button.TextSize = fontSize or 16
+    button.Font = Enum.Font.SourceSansBold
+    button.AutoButtonColor = true
+    button.Text = text
+    button.Parent = root
 
--- Boost FPS sub-button
-local boostBtn = Instance.new("TextButton")
-boostBtn.Parent = gui
-boostBtn.Size = UDim2.new(0, 150, 0, 30)
-boostBtn.Position = UDim2.new(0.5, -278, 0, 45)
-boostBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-boostBtn.TextColor3 = Color3.new(1, 1, 1)
-boostBtn.TextScaled = false
-boostBtn.TextSize = 16
-boostBtn.Font = Enum.Font.SourceSansBold
-boostBtn.Text = "Boost FPS: OFF"
-boostBtn.Visible = false
-addRainbowStroke(boostBtn, 2)
+    addRainbowStroke(button, 2)
+    return button
+end
 
--- Remove Terrain sub-button
-local terrainBtn = Instance.new("TextButton")
-terrainBtn.Parent = gui
-terrainBtn.Size = UDim2.new(0, 150, 0, 30)
-terrainBtn.Position = UDim2.new(0.5, -278, 0, 78)
-terrainBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-terrainBtn.TextColor3 = Color3.new(1, 1, 1)
-terrainBtn.TextScaled = false
-terrainBtn.TextSize = 16
-terrainBtn.Font = Enum.Font.SourceSansBold
-terrainBtn.Text = "Remove Terrain: OFF"
-terrainBtn.Visible = false
-addRainbowStroke(terrainBtn, 2)
+local fpsLabel = Instance.new("TextLabel")
+fpsLabel.Name = "FPSPing"
+fpsLabel.Size = UDim2.fromOffset(240, 32)
+fpsLabel.Position = UDim2.fromOffset(165, 0)
+fpsLabel.BackgroundTransparency = 1
+fpsLabel.TextSize = 19
+fpsLabel.Font = Enum.Font.SourceSansBold
+fpsLabel.TextColor3 = Color3.new(1, 1, 1)
+fpsLabel.TextStrokeTransparency = 0
+fpsLabel.TextStrokeColor3 = Color3.new(0, 0, 0)
+fpsLabel.ZIndex = 10
+fpsLabel.Visible = config.fpsPingEnabled
+fpsLabel.Parent = root
 
--- Hide Players sub-button
-local hidePlayersBtn = Instance.new("TextButton")
-hidePlayersBtn.Parent = gui
-hidePlayersBtn.Size = UDim2.new(0, 150, 0, 30)
-hidePlayersBtn.Position = UDim2.new(0.5, -278, 0, 111) 
-hidePlayersBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-hidePlayersBtn.TextColor3 = Color3.new(1, 1, 1)
-hidePlayersBtn.TextScaled = false
-hidePlayersBtn.TextSize = 16
-hidePlayersBtn.Font = Enum.Font.SourceSansBold
-hidePlayersBtn.Text = "Hide All Players: OFF"
-hidePlayersBtn.Visible = false
-addRainbowStroke(hidePlayersBtn, 2)
+local reduceLagButton = createButton(
+    "ReduceLag",
+    "Reduce Lag",
+    UDim2.fromOffset(165, 45),
+    UDim2.fromOffset(135, 35),
+    17
+)
 
--- Less VFX sub-button
-local lessVfxBtn = Instance.new("TextButton")
-lessVfxBtn.Parent = gui
-lessVfxBtn.Size = UDim2.new(0, 150, 0, 30)
-lessVfxBtn.Position = UDim2.new(0.5, -278, 0, 144)
-lessVfxBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-lessVfxBtn.TextColor3 = Color3.new(1, 1, 1)
-lessVfxBtn.TextScaled = false
-lessVfxBtn.TextSize = 16
-lessVfxBtn.Font = Enum.Font.SourceSansBold
-lessVfxBtn.Text = "Less VFX: OFF"
-lessVfxBtn.Visible = false
-addRainbowStroke(lessVfxBtn, 2)
+local modeButton = createButton(
+    "Mode",
+    "Mode: OFF",
+    UDim2.fromOffset(305, 45),
+    UDim2.fromOffset(100, 35),
+    17
+)
 
--- Mode button
-local modeExpanded = false
+local boostButton = createButton(
+    "BoostFPS",
+    "Boost FPS: OFF",
+    UDim2.fromOffset(0, 45),
+    UDim2.fromOffset(150, 30),
+    16
+)
 
-local b2 = Instance.new("TextButton")
-b2.Parent = gui
-b2.Size = UDim2.new(0, 100, 0, 35)
-b2.Position = UDim2.new(0.5, 20, 0, 45)
-b2.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-b2.TextColor3 = Color3.new(1, 1, 1)
-b2.TextScaled = false
-b2.TextSize = 17
-b2.Font = Enum.Font.SourceSansBold
-b2.Text = "Mode: OFF"
-addRainbowStroke(b2, 2)
+local terrainButton = createButton(
+    "RemoveTerrain",
+    "Remove Terrain: OFF",
+    UDim2.fromOffset(0, 78),
+    UDim2.fromOffset(150, 30),
+    16
+)
 
--- Mode sub-buttons
-local brightModeBtn = Instance.new("TextButton")
-brightModeBtn.Parent = gui
-brightModeBtn.Size = UDim2.new(0, 120, 0, 30)
-brightModeBtn.Position = UDim2.new(0.5, 128, 0, 45)
-brightModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-brightModeBtn.TextColor3 = Color3.new(1, 1, 1)
-brightModeBtn.TextScaled = false
-brightModeBtn.TextSize = 16
-brightModeBtn.Font = Enum.Font.SourceSansBold
-brightModeBtn.Text = "Bright"
-brightModeBtn.Visible = false
-addRainbowStroke(brightModeBtn, 2)
+local hidePlayersButton = createButton(
+    "HidePlayers",
+    "Hide All Players: OFF",
+    UDim2.fromOffset(0, 111),
+    UDim2.fromOffset(150, 30),
+    16
+)
 
-local offModeBtn = Instance.new("TextButton")
-offModeBtn.Parent = gui
-offModeBtn.Size = UDim2.new(0, 120, 0, 30)
-offModeBtn.Position = UDim2.new(0.5, 128, 0, 78)
-offModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-offModeBtn.TextColor3 = Color3.new(1, 1, 1)
-offModeBtn.TextScaled = false
-offModeBtn.TextSize = 16
-offModeBtn.Font = Enum.Font.SourceSansBold
-offModeBtn.Text = "Off"
-offModeBtn.Visible = false
-addRainbowStroke(offModeBtn, 2)
+local lessVfxButton = createButton(
+    "LessVFX",
+    "Less VFX: OFF",
+    UDim2.fromOffset(0, 144),
+    UDim2.fromOffset(150, 30),
+    16
+)
 
-local darkModeBtn = Instance.new("TextButton")
-darkModeBtn.Parent = gui
-darkModeBtn.Size = UDim2.new(0, 120, 0, 30)
-darkModeBtn.Position = UDim2.new(0.5, 128, 0, 111)
-darkModeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-darkModeBtn.TextColor3 = Color3.new(1, 1, 1)
-darkModeBtn.TextScaled = false
-darkModeBtn.TextSize = 16
-darkModeBtn.Font = Enum.Font.SourceSansBold
-darkModeBtn.Text = "Dark"
-darkModeBtn.Visible = false
-addRainbowStroke(darkModeBtn, 2)
+local brightModeButton = createButton(
+    "BrightMode",
+    "Bright",
+    UDim2.fromOffset(430, 45),
+    UDim2.fromOffset(120, 30),
+    16
+)
 
--- Effect row
-local minusBtn = Instance.new("TextButton")
-minusBtn.Parent = gui
-minusBtn.Size = UDim2.new(0, 35, 0, 35)
-minusBtn.Position = UDim2.new(0.5, -120, 0, 85)
-minusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-minusBtn.TextColor3 = Color3.new(1, 1, 1)
-minusBtn.TextScaled = false
-minusBtn.TextSize = 20
-minusBtn.Font = Enum.Font.SourceSansBold
-minusBtn.Text = "-"
-addRainbowStroke(minusBtn, 2)
+local offModeButton = createButton(
+    "OffMode",
+    "Off",
+    UDim2.fromOffset(430, 78),
+    UDim2.fromOffset(120, 30),
+    16
+)
 
-local effectAdjust = Instance.new("TextButton")
-effectAdjust.Parent = gui
-effectAdjust.Size = UDim2.new(0, 170, 0, 35)
-effectAdjust.Position = UDim2.new(0.5, -85, 0, 85)
-effectAdjust.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-effectAdjust.TextColor3 = Color3.new(1, 1, 1)
-effectAdjust.TextScaled = false
-effectAdjust.TextSize = 17
-effectAdjust.Font = Enum.Font.SourceSansBold
-effectAdjust.Text = "Effect: OFF"
-addRainbowStroke(effectAdjust, 2)
+local darkModeButton = createButton(
+    "DarkMode",
+    "Dark",
+    UDim2.fromOffset(430, 111),
+    UDim2.fromOffset(120, 30),
+    16
+)
 
-local plusBtn = Instance.new("TextButton")
-plusBtn.Parent = gui
-plusBtn.Size = UDim2.new(0, 35, 0, 35)
-plusBtn.Position = UDim2.new(0.5, 85, 0, 85)
-plusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-plusBtn.TextColor3 = Color3.new(1, 1, 1)
-plusBtn.TextScaled = false
-plusBtn.TextSize = 20
-plusBtn.Font = Enum.Font.SourceSansBold
-plusBtn.Text = "+"
-addRainbowStroke(plusBtn, 2)
+local minusButton = createButton(
+    "EffectMinus",
+    "-",
+    UDim2.fromOffset(165, 85),
+    UDim2.fromOffset(35, 35),
+    20
+)
 
--- Server Options button
-local serverMainBtn = Instance.new("TextButton")
-serverMainBtn.Parent = gui
-serverMainBtn.Size = UDim2.new(0, 240, 0, 35)
-serverMainBtn.Position = UDim2.new(0.5, -120, 0, 125)
-serverMainBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-serverMainBtn.TextColor3 = Color3.new(1, 1, 1)
-serverMainBtn.TextScaled = false
-serverMainBtn.TextSize = 17
-serverMainBtn.Font = Enum.Font.SourceSansBold
-serverMainBtn.Text = "Server Options"
-addRainbowStroke(serverMainBtn, 2)
+local effectButton = createButton(
+    "Effect",
+    "Effect: OFF",
+    UDim2.fromOffset(200, 85),
+    UDim2.fromOffset(170, 35),
+    17
+)
 
-local serverExpanded = false
+local plusButton = createButton(
+    "EffectPlus",
+    "+",
+    UDim2.fromOffset(370, 85),
+    UDim2.fromOffset(35, 35),
+    20
+)
 
--- Hop Server sub-button (Bình thường)
-local TeleportService = game:GetService("TeleportService")
-local hopBtn = Instance.new("TextButton")
-hopBtn.Parent = gui
-hopBtn.Size = UDim2.new(0, 150, 0, 30)
-hopBtn.Position = UDim2.new(0.5, 128, 0, 144) 
-hopBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-hopBtn.TextColor3 = Color3.new(1, 1, 1)
-hopBtn.TextScaled = false
-hopBtn.TextSize = 16
-hopBtn.Font = Enum.Font.SourceSansBold
-hopBtn.Text = "Hop Server"
-hopBtn.Visible = false
-addRainbowStroke(hopBtn, 2)
+local serverMainButton = createButton(
+    "ServerOptions",
+    "Server Options",
+    UDim2.fromOffset(165, 125),
+    UDim2.fromOffset(240, 35),
+    17
+)
 
--- Hop Less People sub-button (MỚI - Sắp xếp ở ngay phía dưới)
-local hopLessBtn = Instance.new("TextButton")
-hopLessBtn.Parent = gui
-hopLessBtn.Size = UDim2.new(0, 150, 0, 30)
-hopLessBtn.Position = UDim2.new(0.5, 128, 0, 177) 
-hopLessBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-hopLessBtn.TextColor3 = Color3.new(1, 1, 1)
-hopLessBtn.TextScaled = false
-hopLessBtn.TextSize = 14
-hopLessBtn.Font = Enum.Font.SourceSansBold
-hopLessBtn.Text = "Hop Server (Less)"
-hopLessBtn.Visible = false
-addRainbowStroke(hopLessBtn, 2)
+local hopButton = createButton(
+    "HopServer",
+    "Hop Server",
+    UDim2.fromOffset(430, 144),
+    UDim2.fromOffset(120, 30),
+    16
+)
 
--- Rejoin sub-button (Đẩy xuống dưới Y: 210)
-local rejoinBtn = Instance.new("TextButton")
-rejoinBtn.Parent = gui
-rejoinBtn.Size = UDim2.new(0, 150, 0, 30)
-rejoinBtn.Position = UDim2.new(0.5, 128, 0, 210)
-rejoinBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-rejoinBtn.TextColor3 = Color3.new(1, 1, 1)
-rejoinBtn.TextScaled = false
-rejoinBtn.TextSize = 16
-rejoinBtn.Font = Enum.Font.SourceSansBold
-rejoinBtn.Text = "Rejoin Server"
-rejoinBtn.Visible = false
-addRainbowStroke(rejoinBtn, 2)
+local hopLessButton = createButton(
+    "HopLess",
+    "Hop Server (Less)",
+    UDim2.fromOffset(430, 177),
+    UDim2.fromOffset(120, 30),
+    14
+)
 
--- Show FPS/Ping sub-button (Đẩy xuống dưới Y: 243)
-local fpsToggleBtn = Instance.new("TextButton")
-fpsToggleBtn.Parent = gui
-fpsToggleBtn.Size = UDim2.new(0, 150, 0, 30)
-fpsToggleBtn.Position = UDim2.new(0.5, 128, 0, 243)
-fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
-fpsToggleBtn.TextColor3 = Color3.new(1, 1, 1)
-fpsToggleBtn.TextScaled = false
-fpsToggleBtn.TextSize = 16
-fpsToggleBtn.Font = Enum.Font.SourceSansBold
-fpsToggleBtn.Text = cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
-fpsToggleBtn.Visible = false
-addRainbowStroke(fpsToggleBtn, 2)
+local rejoinButton = createButton(
+    "Rejoin",
+    "Rejoin Server",
+    UDim2.fromOffset(430, 210),
+    UDim2.fromOffset(120, 30),
+    16
+)
 
--- Note
+local fpsToggleButton = createButton(
+    "FPSToggle",
+    "Show FPS/Ping: " .. (config.fpsPingEnabled and "ON" or "OFF"),
+    UDim2.fromOffset(430, 243),
+    UDim2.fromOffset(120, 30),
+    13
+)
+
 local note = Instance.new("TextLabel")
-note.Parent = gui
-note.Size = UDim2.new(0, 320, 0, 30)
-note.Position = UDim2.new(0.5, -160, 0, 165)
+note.Name = "Note"
+note.Size = UDim2.fromOffset(320, 30)
+note.Position = UDim2.fromOffset(125, 165)
 note.BackgroundTransparency = 1
-note.Text = "Bấm Alt Trái / Left Alt để ẩn/hiện UI"
-note.TextScaled = false
+note.Text = "Left Alt để ẩn/hiện UI"
 note.TextSize = 16
 note.Font = Enum.Font.SourceSansBold
 note.TextColor3 = Color3.new(1, 1, 1)
 note.TextStrokeTransparency = 0
 note.TextStrokeColor3 = Color3.new(0, 0, 0)
+note.Parent = root
 
--- Draggable
-local drag = false
-local dragInput
-local dragStart
-local startPos
+--// Menu visibility
+local lagExpanded = false
+local modeExpanded = false
+local serverExpanded = false
+local uiVisible = true
 
-local draggableObjects = {
-	l, b1, b2,
-	boostBtn, terrainBtn, hidePlayersBtn, lessVfxBtn,
-	brightModeBtn, offModeBtn, darkModeBtn,
-	minusBtn, effectAdjust, plusBtn,
-	serverMainBtn, hopBtn, hopLessBtn, rejoinBtn, fpsToggleBtn,
-	note
-}
-
-local function updateDrag(input)
-	local delta = input.Position - dragStart
-	for _, obj in ipairs(draggableObjects) do
-		if obj and obj.Parent then
-			obj.Position = UDim2.new(
-				startPos[obj].X.Scale,
-				startPos[obj].X.Offset + delta.X,
-				startPos[obj].Y.Scale,
-				startPos[obj].Y.Offset + delta.Y
-			)
-		end
-	end
+local function setButtonState(button, enabled, onColor)
+    button.BackgroundColor3 = enabled
+        and (onColor or Color3.fromRGB(20, 80, 20))
+        or Color3.fromRGB(30, 30, 30)
 end
 
-l.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1 then
-		drag = true
-		dragStart = input.Position
-		startPos = {}
-		for _, obj in ipairs(draggableObjects) do 
-			if obj and obj.Parent then startPos[obj] = obj.Position end 
-		end
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then drag = false end
-		end)
-	end
-end)
+local function refreshMenus()
+    local showRoot = uiVisible
+    root.Visible = showRoot
 
-l.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement then dragInput = input end
-end)
+    if not showRoot then
+        return
+    end
 
-UIS.InputChanged:Connect(function(input)
-	if drag and input == dragInput then updateDrag(input) end
-end)
+    boostButton.Visible = lagExpanded
+    terrainButton.Visible = lagExpanded
+    hidePlayersButton.Visible = lagExpanded
+    lessVfxButton.Visible = lagExpanded
 
--- Note fade
+    brightModeButton.Visible = modeExpanded
+    offModeButton.Visible = modeExpanded
+    darkModeButton.Visible = modeExpanded
+
+    hopButton.Visible = serverExpanded
+    hopLessButton.Visible = serverExpanded
+    rejoinButton.Visible = serverExpanded
+    fpsToggleButton.Visible = serverExpanded
+end
+
+--// Dragging: move one root instead of moving 20+ objects.
+do
+    local dragging = false
+    local dragStart
+    local startPosition
+
+    connect(root.InputBegan, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+
+            dragging = true
+            dragStart = input.Position
+            startPosition = root.Position
+        end
+    end)
+
+    connect(UserInputService.InputChanged, function(input)
+        if not dragging then
+            return
+        end
+
+        if input.UserInputType ~= Enum.UserInputType.MouseMovement
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
+        end
+
+        local delta = input.Position - dragStart
+
+        root.Position = UDim2.new(
+            startPosition.X.Scale,
+            startPosition.X.Offset + delta.X,
+            startPosition.Y.Scale,
+            startPosition.Y.Offset + delta.Y
+        )
+    end)
+
+    connect(UserInputService.InputEnded, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+--// Note fade
 task.delay(5, function()
-	for i = 1, 20 do
-		if note and note.Parent then
-			note.TextTransparency = i / 20
-			note.TextStrokeTransparency = i / 20
-			task.wait(0.05)
-		end
-	end
-	if note and note.Parent then note:Destroy() end
+    if not note.Parent then
+        return
+    end
+
+    for alpha = 0.05, 1, 0.05 do
+        if not note.Parent then
+            return
+        end
+
+        note.TextTransparency = alpha
+        note.TextStrokeTransparency = alpha
+        task.wait(0.05)
+    end
+
+    if note.Parent then
+        note:Destroy()
+    end
 end)
 
--- Alt hide/show
-local uiVisible = true
-UIS.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == Enum.KeyCode.LeftAlt then
-		uiVisible = not uiVisible
-		if uiVisible then
-			b1.Visible = true
-			b2.Visible = true
-			minusBtn.Visible = true
-			effectAdjust.Visible = true
-			plusBtn.Visible = true
-			serverMainBtn.Visible = true
-			boostBtn.Visible = lagExpanded
-			terrainBtn.Visible = lagExpanded
-			hidePlayersBtn.Visible = lagExpanded
-			lessVfxBtn.Visible = lagExpanded
-			brightModeBtn.Visible = modeExpanded
-			offModeBtn.Visible = modeExpanded
-			darkModeBtn.Visible = modeExpanded
-			hopBtn.Visible = serverExpanded
-			hopLessBtn.Visible = serverExpanded
-			rejoinBtn.Visible = serverExpanded
-			fpsToggleBtn.Visible = serverExpanded
-		else
-			for _, v in ipairs(gui:GetChildren()) do
-				if v ~= note and v ~= l then v.Visible = false end
-			end
-		end
-	end
-end)
-
--- Anti AFK
-plr.Idled:Connect(function()
-	VirtualUser:CaptureController()
-	VirtualUser:ClickButton2(Vector2.new())
-end)
-
-local savedBoost = {}
-local savedTerrain = {}
-
-local brightConn = nil
+--// Lighting
+local lightingHeartbeatConnection = nil
 
 local function updateEffectText()
-	if cfg.modeIndex == 1 then
-		effectAdjust.Text = "Brightness: " .. cfg.effectLevel
-	elseif cfg.modeIndex == 3 then
-		effectAdjust.Text = "Darkness: " .. cfg.effectLevel
-	else
-		effectAdjust.Text = "Effect: OFF"
-	end
+    if config.modeIndex == 1 then
+        effectButton.Text = "Brightness: " .. config.effectLevel
+    elseif config.modeIndex == 3 then
+        effectButton.Text = "Darkness: " .. config.effectLevel
+    else
+        effectButton.Text = "Effect: OFF"
+    end
 end
 
-local function updateModeHighlight()
-	brightModeBtn.BackgroundColor3 = cfg.modeIndex == 1
-		and Color3.fromRGB(60, 60, 20) or Color3.fromRGB(30, 30, 30)
-	offModeBtn.BackgroundColor3 = cfg.modeIndex == 2
-		and Color3.fromRGB(20, 60, 20) or Color3.fromRGB(30, 30, 30)
-	darkModeBtn.BackgroundColor3 = cfg.modeIndex == 3
-		and Color3.fromRGB(20, 20, 60) or Color3.fromRGB(30, 30, 30)
+local function updateModeUI()
+    local mode = config.modeIndex
+
+    modeButton.Text = ({
+        [1] = "Mode: BRIGHT",
+        [2] = "Mode: OFF",
+        [3] = "Mode: DARK",
+    })[mode] or "Mode: OFF"
+
+    setButtonState(
+        brightModeButton,
+        mode == 1,
+        Color3.fromRGB(60, 60, 20)
+    )
+
+    setButtonState(
+        offModeButton,
+        mode == 2,
+        Color3.fromRGB(20, 60, 20)
+    )
+
+    setButtonState(
+        darkModeButton,
+        mode == 3,
+        Color3.fromRGB(20, 20, 60)
+    )
+
+    updateEffectText()
 end
 
--- ─── HỆ THỐNG HIDE PLAYERS ───────────────────────────────────────────────
-local hideConn = nil
-local savedPlayersTransparency = {} 
+local function applyLightingMode()
+    if lightingHeartbeatConnection then
+        disconnect(lightingHeartbeatConnection)
+        lightingHeartbeatConnection = nil
+    end
+
+    local mode = config.modeIndex
+    local level = math.clamp(config.effectLevel, 1, 10)
+
+    if mode == 2 then
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.Ambient = originalLighting.Ambient
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+        Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+        Lighting.GlobalShadows = config.lessVfxEnabled
+            and false
+            or originalLighting.GlobalShadows
+
+    elseif mode == 1 then
+        local ambient = 0.2 + (level * 0.075)
+
+        Lighting.ClockTime = 14
+        Lighting.FogEnd = 100000
+        Lighting.GlobalShadows = false
+        Lighting.Brightness = 1 + (level * 0.45)
+        Lighting.Ambient = Color3.new(ambient, ambient, ambient)
+        Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
+        Lighting.ExposureCompensation = level * 0.22
+
+    elseif mode == 3 then
+        local ambient = math.clamp(0.6 - (level * 0.055), 0, 1)
+
+        Lighting.ClockTime = 0
+        Lighting.GlobalShadows = not config.lessVfxEnabled
+        Lighting.FogEnd = math.max(400, 3000 - (level * 260))
+        Lighting.Brightness = math.clamp(1.5 - (level * 0.13), 0, 10)
+        Lighting.Ambient = Color3.new(ambient, ambient, ambient)
+        Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
+        Lighting.ExposureCompensation = -(level * 0.28)
+    end
+
+    updateModeUI()
+end
+
+local function setLightingMode(mode)
+    if not VALID_MODES[mode] then
+        mode = 2
+    end
+
+    config.modeIndex = mode
+    saveConfig()
+    applyLightingMode()
+end
+
+--// Player character cache for faster "other player" checks
+local otherCharacterSet = {}
+
+--// Hide Players
+local hidePlayerConnections = {}
+
+local function rememberHidden(instance, property)
+    rememberProperty(savedHiddenPlayers, instance, property)
+end
+
+local function applyHideToInstance(instance)
+    if not instance or not instance.Parent or not config.hidePlayersEnabled then
+        return
+    end
+
+    if instance:IsA("BasePart") then
+        rememberHidden(instance, "LocalTransparencyModifier")
+        instance.LocalTransparencyModifier = 1
+
+    elseif instance:IsA("Decal") or instance:IsA("Texture") then
+        rememberHidden(instance, "Transparency")
+        instance.Transparency = 1
+
+    elseif instance:IsA("BillboardGui") or instance:IsA("SurfaceGui") then
+        rememberHidden(instance, "Enabled")
+        instance.Enabled = false
+    end
+end
 
 local function applyHideToCharacter(character)
-	if not character or not character:IsDescendantOf(workspace) then return end
+    if not character or not character.Parent then
+        return
+    end
 
-	for _, part in ipairs(character:GetDescendants()) do
-		if part:IsA("BasePart") or part:IsA("Decal") then
-			if part.Name == "HumanoidRootPart" or part.Name == "CollisionPart" then
-				if cfg.hidePlayersEnabled then
-					part.Transparency = 1
-				end
-			else
-				if cfg.hidePlayersEnabled then
-					if savedPlayersTransparency[part] == nil then
-						savedPlayersTransparency[part] = part.Transparency
-					end
-					part.Transparency = 1
-				else
-					if savedPlayersTransparency[part] ~= nil then
-						part.Transparency = savedPlayersTransparency[part]
-					else
-						part.Transparency = 0
-					end
-				end
-			end
-		elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
-			part.Enabled = not cfg.hidePlayersEnabled
-		end
-	end
+    for _, instance in ipairs(character:GetDescendants()) do
+        applyHideToInstance(instance)
+    end
 end
 
-local function applyHidePlayers(state)
-	cfg.hidePlayersEnabled = state
-	saveCfg()
-	hidePlayersBtn.Text = state and "Hide All Players: ON" or "Hide All Players: OFF"
-	hidePlayersBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
-
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p.Character then
-			applyHideToCharacter(p.Character)
-		end
-	end
-
-	if state then
-		if not hideConn then
-			hideConn = workspace.DescendantAdded:Connect(function(v)
-				for _, p in ipairs(Players:GetPlayers()) do
-					if p.Character and v:IsDescendantOf(p.Character) then
-						task.defer(function()
-							if v:IsA("BasePart") or v:IsA("Decal") then
-								if v.Name ~= "HumanoidRootPart" then
-									if savedPlayersTransparency[v] == nil then
-										savedPlayersTransparency[v] = v.Transparency
-									end
-								end
-								v.Transparency = 1
-							end
-						end)
-						break
-					end
-				end
-			end)
-		end
-	else
-		if hideConn then hideConn:Disconnect() hideConn = nil end
-		task.delay(0.2, function()
-			savedPlayersTransparency = {}
-		end)
-	end
+local function clearHideConnections()
+    for key, connection in pairs(hidePlayerConnections) do
+        disconnect(connection)
+        hidePlayerConnections[key] = nil
+    end
 end
 
-Players.PlayerAdded:Connect(function(p)
-	p.CharacterAdded:Connect(function(char)
-		task.wait(0.5) 
-		applyHideToCharacter(char)
-	end)
-end)
+local function setupHideForPlayer(playerObject)
+    local character = playerObject.Character
 
-if plr then
-	plr.CharacterAdded:Connect(function(char)
-		task.wait(0.5)
-		applyHideToCharacter(char)
-	end)
+    if character then
+        task.defer(function()
+            if config.hidePlayersEnabled and character.Parent then
+                applyHideToCharacter(character)
+            end
+        end)
+
+        if not hidePlayerConnections[playerObject] then
+            hidePlayerConnections[playerObject] = connect(
+                character.DescendantAdded,
+                function(instance)
+                    task.defer(function()
+                        applyHideToInstance(instance)
+                    end)
+                end
+            )
+        end
+    end
 end
 
--- ─── Less VFX ────────────────────────────────────────────────────────────────
-local vfxSaved = {}
-local vfxConn = nil
+local function applyHidePlayers(enabled)
+    config.hidePlayersEnabled = enabled
+    saveConfig()
 
-local function isOtherCharacter(v)
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= plr and p.Character and v:IsDescendantOf(p.Character) then
-			return true
-		end
-	end
-	return false
+    hidePlayersButton.Text = "Hide All Players: " .. (enabled and "ON" or "OFF")
+    setButtonState(hidePlayersButton, enabled)
+
+    clearHideConnections()
+
+    if enabled then
+        for _, otherPlayer in ipairs(Players:GetPlayers()) do
+            if otherPlayer ~= player then
+                setupHideForPlayer(otherPlayer)
+            end
+        end
+    else
+        restoreStorage(savedHiddenPlayers)
+    end
 end
 
-local function isVFXType(v)
-	return v:IsA("ParticleEmitter")
-		or v:IsA("Trail")
-		or v:IsA("Smoke")
-		or v:IsA("Fire")
-		or v:IsA("Sparkles")
-		or v:IsA("Beam")
-		or v:IsA("SelectionBox")
+--// Less VFX
+local function isVfx(instance)
+    return instance:IsA("ParticleEmitter")
+        or instance:IsA("Trail")
+        or instance:IsA("Smoke")
+        or instance:IsA("Fire")
+        or instance:IsA("Sparkles")
+        or instance:IsA("Beam")
+        or instance:IsA("SelectionBox")
 end
 
-local function isShadowCaster(v)
-	return v:IsA("BasePart") or v:IsA("UnionOperation") or v:IsA("MeshPart")
+local function isShadowCaster(instance)
+    return instance:IsA("BasePart")
 end
 
-local function applyVfxToObject(v)
-	if not cfg.lessVfxEnabled then return end
+local function applyVfxToInstance(instance)
+    if not config.lessVfxEnabled or not instance or not instance.Parent then
+        return
+    end
 
-	local char = plr.Character
-	if isVFXType(v) and (not char or not v:IsDescendantOf(char)) then
-		if vfxSaved[v] == nil then vfxSaved[v] = v.Enabled end
-		v.Enabled = false
-	elseif isShadowCaster(v) and (not char or not v:IsDescendantOf(char)) then
-		if vfxSaved[v] == nil then vfxSaved[v] = v.CastShadow end
-		v.CastShadow = false
-	elseif (v:IsA("Decal") or v:IsA("Texture")) and isOtherCharacter(v) then
-		if vfxSaved[v] == nil then vfxSaved[v] = v.Transparency end
-		v.Transparency = 1
-	elseif v:IsA("BasePart") and v.Name == "Handle" and isOtherCharacter(v) then
-		if vfxSaved[v] == nil then vfxSaved[v] = v.LocalTransparencyModifier end
-		v.LocalTransparencyModifier = 1
-	end
+    local localCharacter = player.Character
+
+    if isVfx(instance) and (not localCharacter or not instance:IsDescendantOf(localCharacter)) then
+        rememberProperty(savedVfx, instance, "Enabled")
+        instance.Enabled = false
+        return
+    end
+
+    if isShadowCaster(instance) and (not localCharacter or not instance:IsDescendantOf(localCharacter)) then
+        rememberProperty(savedVfx, instance, "CastShadow")
+        instance.CastShadow = false
+        return
+    end
+
+    if (instance:IsA("Decal") or instance:IsA("Texture"))
+        and isOtherCharacterDescendant(instance) then
+
+        rememberProperty(savedVfx, instance, "Transparency")
+        instance.Transparency = 1
+        return
+    end
+
+    if instance:IsA("BasePart")
+        and instance.Name == "Handle"
+        and isOtherCharacterDescendant(instance) then
+
+        rememberProperty(savedVfx, instance, "LocalTransparencyModifier")
+        instance.LocalTransparencyModifier = 1
+    end
 end
 
-local function applyLessVFX(state)
-	cfg.lessVfxEnabled = state
-	saveCfg()
-	lessVfxBtn.Text = state and "Less VFX: ON" or "Less VFX: OFF"
-	lessVfxBtn.BackgroundColor3 = state and Color3.fromRGB(80, 20, 20) or Color3.fromRGB(30, 30, 30)
+local function applyLessVFX(enabled)
+    config.lessVfxEnabled = enabled
+    saveConfig()
 
-	if state then
-		Lighting.GlobalShadows = false
-		for _, v in ipairs(workspace:GetDescendants()) do
-			applyVfxToObject(v)
-		end
-		if not vfxConn then
-			vfxConn = workspace.DescendantAdded:Connect(function(v)
-				task.defer(applyVfxToObject, v)
-			end)
-		end
-	else
-		if vfxConn then vfxConn:Disconnect() vfxConn = nil end
-		for v, original in pairs(vfxSaved) do
-			pcall(function()
-				if isVFXType(v) then v.Enabled = original
-				elseif isShadowCaster(v) then v.CastShadow = original
-				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original
-				elseif v:IsA("BasePart") then v.LocalTransparencyModifier = original end
-			end)
-		end
-		vfxSaved = {}
-		Lighting.GlobalShadows = getgenv().BlockVNOriginalLighting.GlobalShadows
-	end
+    lessVfxButton.Text = "Less VFX: " .. (enabled and "ON" or "OFF")
+    setButtonState(lessVfxButton, enabled, Color3.fromRGB(80, 20, 20))
+
+    if enabled then
+        for _, instance in ipairs(workspace:GetDescendants()) do
+            applyVfxToInstance(instance)
+        end
+    else
+        restoreStorage(savedVfx)
+    end
+
+    applyLightingMode()
 end
 
--- ─── Boost FPS & Remove Terrain ──────────────────────────────────────────────
-local boostConn = nil
-local terrainConn = nil
+--// Boost FPS
+local boostTerrain = nil
 
-local function checkAndApplyBoostToObject(v)
-	if not cfg.boostEnabled then return end
-	if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
-		if not savedBoost[v] then savedBoost[v] = v.Material end
-		v.Material = Enum.Material.SmoothPlastic
-		v.Reflectance = 0
-	elseif v:IsA("Decal") or v:IsA("Texture") then
-		if not savedBoost[v] then savedBoost[v] = v.Transparency end
-		v.Transparency = 1
-	elseif isVFXType(v) then
-		if not savedBoost[v] then savedBoost[v] = v.Enabled end
-		v.Enabled = false
-	end
+local function saveTerrainColors(terrain)
+    table.clear(savedTerrainColors)
+
+    for _, material in ipairs(Enum.Material:GetEnumItems()) do
+        local ok, color = pcall(function()
+            return terrain:GetMaterialColor(material)
+        end)
+
+        if ok then
+            savedTerrainColors[material] = color
+        end
+    end
 end
 
-local function checkAndApplyTerrainToObject(v)
-	if not cfg.terrainEnabled then return end
-	if v:IsA("BasePart") and not v:IsDescendantOf(plr.Character) then
-		if not savedTerrain[v] then savedTerrain[v] = v.LocalTransparencyModifier end
-		v.LocalTransparencyModifier = 1
-	elseif v:IsA("Decal") or v:IsA("Texture") then
-		if not savedTerrain[v] then savedTerrain[v] = v.Transparency end
-		v.Transparency = 1
-	end
+local function restoreTerrainColors(terrain)
+    if not terrain then
+        return
+    end
+
+    for material, color in pairs(savedTerrainColors) do
+        pcall(function()
+            terrain:SetMaterialColor(material, color)
+        end)
+    end
+
+    table.clear(savedTerrainColors)
 end
 
-local function applyBoostFPS(state)
-	cfg.boostEnabled = state
-	saveCfg()
-	boostBtn.Text = state and "Boost FPS: ON" or "Boost FPS: OFF"
-	boostBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
+local function applyBoostToInstance(instance)
+    if not config.boostEnabled or not instance or not instance.Parent then
+        return
+    end
 
-	local terrain = workspace:FindFirstChildOfClass("Terrain")
-	if terrain then
-		for _, mat in ipairs(Enum.Material:GetEnumItems()) do
-			pcall(function()
-				if state then terrain:SetMaterialColor(mat, Color3.fromRGB(50, 50, 50))
-				else terrain:ResetMaterialColor(mat) end
-			end)
-		end
-	end
+    local localCharacter = player.Character
 
-	if state then
-		for _, v in ipairs(workspace:GetDescendants()) do
-			checkAndApplyBoostToObject(v)
-		end
-		if not boostConn then
-			boostConn = workspace.DescendantAdded:Connect(function(v)
-				task.defer(checkAndApplyBoostToObject, v)
-			end)
-		end
-	else
-		if boostConn then boostConn:Disconnect() boostConn = nil end
-		for v, original in pairs(savedBoost) do
-			pcall(function()
-				if v:IsA("BasePart") then v.Material = original
-				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original
-				elseif isVFXType(v) then v.Enabled = original end
-			end)
-		end
-		savedBoost = {}
-	end
+    if instance:IsA("BasePart")
+        and (not localCharacter or not instance:IsDescendantOf(localCharacter)) then
+
+        rememberProperty(savedBoost, instance, "Material")
+        rememberProperty(savedBoost, instance, "Reflectance")
+
+        instance.Material = Enum.Material.SmoothPlastic
+        instance.Reflectance = 0
+
+    elseif instance:IsA("Decal") or instance:IsA("Texture") then
+        rememberProperty(savedBoost, instance, "Transparency")
+        instance.Transparency = 1
+
+    elseif isVfx(instance) then
+        rememberProperty(savedBoost, instance, "Enabled")
+        instance.Enabled = false
+    end
 end
 
-local function applyRemoveTerrain(state)
-	cfg.terrainEnabled = state
-	saveCfg()
-	terrainBtn.Text = state and "Remove Terrain: ON" or "Remove Terrain: OFF"
-	terrainBtn.BackgroundColor3 = state and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
+local function applyBoostFPS(enabled)
+    config.boostEnabled = enabled
+    saveConfig()
 
-	if state then
-		for _, v in ipairs(workspace:GetDescendants()) do
-			checkAndApplyTerrainToObject(v)
-		end
-		if not terrainConn then
-			terrainConn = workspace.DescendantAdded:Connect(function(v)
-				task.defer(checkAndApplyTerrainToObject, v)
-			end)
-		end
-	else
-		if terrainConn then terrainConn:Disconnect() terrainConn = nil end
-		for v, original in pairs(savedTerrain) do
-			pcall(function()
-				if v:IsA("BasePart") then v.LocalTransparencyModifier = original
-				elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = original end
-			end)
-		end
-		savedTerrain = {}
-	end
+    boostButton.Text = "Boost FPS: " .. (enabled and "ON" or "OFF")
+    setButtonState(boostButton, enabled)
+
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+
+    if enabled then
+        if terrain and boostTerrain ~= terrain then
+            boostTerrain = terrain
+            saveTerrainColors(terrain)
+
+            for material in pairs(savedTerrainColors) do
+                pcall(function()
+                    terrain:SetMaterialColor(material, Color3.fromRGB(50, 50, 50))
+                end)
+            end
+        end
+
+        for _, instance in ipairs(workspace:GetDescendants()) do
+            applyBoostToInstance(instance)
+        end
+    else
+        if terrain and next(savedTerrainColors) ~= nil then
+            restoreTerrainColors(terrain)
+        else
+            table.clear(savedTerrainColors)
+        end
+
+        restoreStorage(savedBoost)
+        boostTerrain = nil
+    end
 end
 
-local function applyBright(mode)
-	if brightConn then brightConn:Disconnect() brightConn = nil end
-	cfg.modeIndex = mode
-	saveCfg()
-	updateEffectText()
-	updateModeHighlight()
-	if mode == 1 then
-		b2.Text = "Mode: BRIGHT"
-		brightConn = RS.RenderStepped:Connect(function()
-			local intensity = math.clamp(cfg.effectLevel, 1, 10)
-			Lighting.ClockTime = 14
-			Lighting.FogEnd = 100000
-			Lighting.GlobalShadows = false
-			Lighting.Brightness = 1 + (intensity * 0.45)
-			local ambient = 0.2 + (intensity * 0.075)
-			Lighting.Ambient = Color3.new(ambient, ambient, ambient)
-			Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
-			Lighting.ExposureCompensation = intensity * 0.22
-		end)
-	elseif mode == 2 then
-		b2.Text = "Mode: OFF"
-		local old = getgenv().BlockVNOriginalLighting
-		Lighting.Brightness = old.Brightness
-		Lighting.ClockTime = old.ClockTime
-		Lighting.FogEnd = old.FogEnd
-		Lighting.GlobalShadows = cfg.lessVfxEnabled and false or old.GlobalShadows
-		Lighting.Ambient = old.Ambient
-		Lighting.OutdoorAmbient = old.OutdoorAmbient
-		Lighting.ExposureCompensation = old.ExposureCompensation
-	elseif mode == 3 then
-		b2.Text = "Mode: DARK"
-		brightConn = RS.RenderStepped:Connect(function()
-			local darkness = math.clamp(cfg.effectLevel, 1, 10)
-			Lighting.ClockTime = 0
-			Lighting.GlobalShadows = not cfg.lessVfxEnabled
-			Lighting.FogEnd = 3000 - (darkness * 260)
-			Lighting.Brightness = 1.5 - (darkness * 0.13)
-			local ambient = math.clamp(0.6 - (darkness * 0.055), 0, 1)
-			Lighting.Ambient = Color3.new(ambient, ambient, ambient)
-			Lighting.OutdoorAmbient = Color3.new(ambient, ambient, ambient)
-			Lighting.ExposureCompensation = -(darkness * 0.28)
-		end)
-	end
+--// Remove Terrain / World Hiding
+local function applyTerrainToInstance(instance)
+    if not config.terrainEnabled or not instance or not instance.Parent then
+        return
+    end
+
+    local localCharacter = player.Character
+
+    if instance:IsA("BasePart")
+        and (not localCharacter or not instance:IsDescendantOf(localCharacter)) then
+
+        rememberProperty(savedTerrain, instance, "LocalTransparencyModifier")
+        instance.LocalTransparencyModifier = 1
+
+    elseif instance:IsA("Decal") or instance:IsA("Texture") then
+        rememberProperty(savedTerrain, instance, "Transparency")
+        instance.Transparency = 1
+    end
 end
 
--- Button logic
-b1.MouseButton1Click:Connect(function()
-	lagExpanded = not lagExpanded
-	boostBtn.Visible = lagExpanded
-	terrainBtn.Visible = lagExpanded
-	hidePlayersBtn.Visible = lagExpanded 
-	lessVfxBtn.Visible = lagExpanded
+local function applyRemoveTerrain(enabled)
+    config.terrainEnabled = enabled
+    saveConfig()
+
+    terrainButton.Text = "Remove Terrain: " .. (enabled and "ON" or "OFF")
+    setButtonState(terrainButton, enabled)
+
+    if enabled then
+        for _, instance in ipairs(workspace:GetDescendants()) do
+            applyTerrainToInstance(instance)
+        end
+    else
+        restoreStorage(savedTerrain)
+    end
+end
+
+--// Workspace change handling
+-- One DescendantAdded connection handles dynamic objects for all enabled systems.
+connect(
+    workspace.DescendantAdded,
+    function(instance)
+        if not (config.terrainEnabled or config.boostEnabled or config.lessVfxEnabled) then
+            return
+        end
+
+        task.defer(function()
+            if config.terrainEnabled then
+                applyTerrainToInstance(instance)
+            end
+
+            if config.boostEnabled then
+                applyBoostToInstance(instance)
+            end
+
+            if config.lessVfxEnabled then
+                applyVfxToInstance(instance)
+            end
+        end)
+    end
+)
+
+--// Player lifecycle / character cache
+local function cacheCharacter(playerObject, character)
+    if playerObject ~= player and character then
+        otherCharacterSet[character] = true
+    end
+
+    if config.hidePlayersEnabled and playerObject ~= player and character then
+        setupHideForPlayer(playerObject)
+    end
+
+    if config.lessVfxEnabled and playerObject ~= player and character then
+        task.defer(function()
+            if not character.Parent then
+                return
+            end
+
+            for _, instance in ipairs(character:GetDescendants()) do
+                applyVfxToInstance(instance)
+            end
+        end)
+    end
+end
+
+local function watchPlayer(playerObject)
+    if playerObject == player then
+        return
+    end
+
+    if playerObject.Character then
+        cacheCharacter(playerObject, playerObject.Character)
+    end
+
+    connect(playerObject.CharacterAdded, function(character)
+        task.wait(0.2)
+
+        cacheCharacter(playerObject, character)
+    end)
+end
+
+for _, existingPlayer in ipairs(Players:GetPlayers()) do
+    watchPlayer(existingPlayer)
+end
+
+connect(Players.PlayerAdded, watchPlayer)
+
+connect(Players.PlayerRemoving, function(leavingPlayer)
+    if leavingPlayer.Character then
+        otherCharacterSet[leavingPlayer.Character] = nil
+    end
+
+    if hidePlayerConnections[leavingPlayer] then
+        disconnect(hidePlayerConnections[leavingPlayer])
+        hidePlayerConnections[leavingPlayer] = nil
+    end
 end)
 
-serverMainBtn.MouseButton1Click:Connect(function()
-	serverExpanded = not serverExpanded
-	hopBtn.Visible = serverExpanded
-	hopLessBtn.Visible = serverExpanded
-	rejoinBtn.Visible = serverExpanded
-	fpsToggleBtn.Visible = serverExpanded
+--// Anti-AFK
+connect(player.Idled, function()
+    pcall(function()
+        local virtualUser = VirtualUser
+        virtualUser:CaptureController()
+        virtualUser:ClickButton2(Vector2.new())
+    end)
 end)
 
--- ─── LOGIC HOP SERVER BÌNH THƯỜNG (HOẠT ĐỘNG 100%) ─────────────────────────
-local isHopping = false
-hopBtn.MouseButton1Click:Connect(function()
-	if isHopping then return end
-	isHopping = true
-	hopBtn.Text = "Hopping..."
-	hopBtn.BackgroundColor3 = Color3.fromRGB(20, 60, 20)
+--// HTTP helper for executor environments
+local function executorRequest(url)
+    local requestFunction =
+        getExecutorFunction("request")
+        or getExecutorFunction("http_request")
 
-	local currentPlaceId = game.PlaceId
-	local currentJobId = game.JobId
-	local teleportSuccess = false
+    if not requestFunction and type(syn) == "table" and type(syn.request) == "function" then
+        requestFunction = syn.request
+    end
 
-	pcall(function()
-		local url = "https://games.roblox.com/v1/games/" .. currentPlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-		local rawData = game:HttpGet(url)
-		if rawData then
-			local servers = HttpService:JSONDecode(rawData)
-			if servers and servers.data then
-				for _, s in ipairs(servers.data) do
-					if s.id ~= currentJobId and tonumber(s.playing) < tonumber(s.maxPlayers) then
-						TeleportService:TeleportToPlaceInstance(currentPlaceId, s.id, plr)
-						teleportSuccess = true
-						break
-					end
-				end
-			end
-		end
-	end)
+    if type(requestFunction) == "function" then
+        local ok, response = pcall(function()
+            return requestFunction({
+                Url = url,
+                Method = "GET",
+            })
+        end)
 
-	if not teleportSuccess then
-		task.wait(0.2)
-		pcall(function()
-			TeleportService:Teleport(currentPlaceId, plr)
-			teleportSuccess = true
-		end)
-	end
+        if ok and type(response) == "table" then
+            local statusCode = tonumber(response.StatusCode or response.Status)
+            local body = response.Body or response.body
 
-	if not teleportSuccess then
-		hopBtn.Text = "Error! Retry"
-		hopBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
-		task.wait(1.5)
-		hopBtn.Text = "Hop Server"
-		hopBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-		isHopping = false
-	end
+            if body and (not statusCode or (statusCode >= 200 and statusCode < 300)) then
+                return body
+            end
+        end
+    end
+
+    local ok, body = pcall(function()
+        return game:HttpGet(url)
+    end)
+
+    return ok and body or nil
+end
+
+local function getPublicServers(placeId, sortOrder, maxPages)
+    local servers = {}
+    local cursor = nil
+
+    for _ = 1, (maxPages or 3) do
+        local url = ("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=%s&limit=100")
+            :format(placeId, sortOrder)
+
+        if cursor then
+            url = url .. "&cursor=" .. HttpService:UrlEncode(cursor)
+        end
+
+        local raw = executorRequest(url)
+        if not raw then
+            break
+        end
+
+        local decoded
+        local ok = pcall(function()
+            decoded = HttpService:JSONDecode(raw)
+        end)
+
+        if not ok or type(decoded) ~= "table" or type(decoded.data) ~= "table" then
+            break
+        end
+
+        for _, server in ipairs(decoded.data) do
+            table.insert(servers, server)
+        end
+
+        cursor = decoded.nextPageCursor
+        if not cursor or cursor == "" then
+            break
+        end
+    end
+
+    return servers
+end
+
+--// Teleport UI state
+local teleportBusy = false
+
+local function setTeleportButton(button, text, busy)
+    button.Text = text
+    button.AutoButtonColor = not busy
+    setButtonState(button, busy, Color3.fromRGB(20, 60, 20))
+end
+
+local function resetTeleportButton(button, defaultText)
+    if button and button.Parent then
+        button.Text = defaultText
+        button.AutoButtonColor = true
+        button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    end
+end
+
+connect(TeleportService.TeleportInitFailed, function(failedPlayer)
+    if failedPlayer ~= player then
+        return
+    end
+
+    teleportBusy = false
+
+    resetTeleportButton(hopButton, "Hop Server")
+    resetTeleportButton(hopLessButton, "Hop Server (Less)")
+    resetTeleportButton(rejoinButton, "Rejoin Server")
 end)
 
--- ─── LOGIC HOP SERVER ÍT NGƯỜI (VIẾT LẠI THEO PHONG CÁCH MỚI KHÔNG LỖI) ─────────
-hopLessBtn.MouseButton1Click:Connect(function()
-	if isHopping then return end
-	isHopping = true
-	hopLessBtn.Text = "Searching..."
-	hopLessBtn.BackgroundColor3 = Color3.fromRGB(20, 60, 20)
+local function teleportToServer(serverId, button, activeText, defaultText)
+    if teleportBusy then
+        return false
+    end
 
-	local currentPlaceId = game.PlaceId
-	local currentJobId = game.JobId
-	local teleportSuccess = false
+    teleportBusy = true
+    setTeleportButton(button, activeText, true)
 
-	pcall(function()
-		-- Thử tải dữ liệu từ API chuẩn (Sử dụng cách fetch chuỗi tương tự nút Hop bth)
-		local url = "https://games.roblox.com/v1/games/" .. currentPlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-		local rawData = game:HttpGet(url)
-		
-		if rawData then
-			local servers = HttpService:JSONDecode(rawData)
-			if servers and servers.data then
-				local bestServer = nil
-				local minPlayers = math.huge
+    local ok = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, serverId, player)
+    end)
 
-				-- Duyệt danh sách, lọc ra server hợp lệ và ít người chơi nhất
-				for _, s in ipairs(servers.data) do
-					local count = tonumber(s.playing)
-					local maxP = tonumber(s.maxPlayers)
-					if s.id ~= currentJobId and count and maxP and count < maxP and count > 0 then
-						if count < minPlayers then
-							minPlayers = count
-							bestServer = s.id
-						end
-					end
-				end
+    if not ok then
+        teleportBusy = false
+        resetTeleportButton(button, defaultText)
+        return false
+    end
 
-				-- Nếu tìm được phòng ít người nhất, tiến hành dịch chuyển
-				if bestServer then
-					TeleportService:TeleportToPlaceInstance(currentPlaceId, bestServer, plr)
-					teleportSuccess = true
-				end
-			end
-		end
-	end)
+    return true
+end
 
-	-- Dự phòng: Nếu hệ thống tìm server ít người lỗi, ép buộc Roblox nhảy phòng tự động thay vì báo lỗi kẹt
-	if not teleportSuccess then
-		task.wait(0.2)
-		pcall(function()
-			TeleportService:Teleport(currentPlaceId, plr)
-			teleportSuccess = true
-		end)
-	end
+local function hopNormal()
+    local placeId = game.PlaceId
+    local currentJobId = game.JobId
 
-	if not teleportSuccess then
-		hopLessBtn.Text = "Error! Retry"
-		hopLessBtn.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
-		task.wait(1.5)
-		hopLessBtn.Text = "Hop Server (Less)"
-		hopLessBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-		isHopping = false
-	end
-end)
--- ─────────────────────────────────────────────────────────────────────────────
+    local servers = getPublicServers(placeId, "Asc", 3)
 
-rejoinBtn.MouseButton1Click:Connect(function()
-	rejoinBtn.Text = "Rejoining..."
-	rejoinBtn.BackgroundColor3 = Color3.fromRGB(20, 60, 20)
-	pcall(function()
-		if #Players:GetPlayers() <= 1 then
-			TeleportService:Teleport(game.PlaceId, plr)
-		else
-			TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, plr)
-		end
-	end)
-end)
+    for _, server in ipairs(servers) do
+        local playing = tonumber(server.playing)
+        local maxPlayers = tonumber(server.maxPlayers)
 
-fpsToggleBtn.MouseButton1Click:Connect(function()
-	cfg.fpsPingEnabled = not cfg.fpsPingEnabled
-	saveCfg()
-	l.Visible = cfg.fpsPingEnabled
-	fpsToggleBtn.Text = cfg.fpsPingEnabled and "Show FPS/Ping: ON" or "Show FPS/Ping: OFF"
-	fpsToggleBtn.BackgroundColor3 = cfg.fpsPingEnabled and Color3.fromRGB(20, 80, 20) or Color3.fromRGB(30, 30, 30)
-end)
+        if server.id ~= currentJobId
+            and playing
+            and maxPlayers
+            and playing < maxPlayers then
 
-boostBtn.MouseButton1Click:Connect(function() applyBoostFPS(not cfg.boostEnabled) end)
-terrainBtn.MouseButton1Click:Connect(function() applyRemoveTerrain(not cfg.terrainEnabled) end)
-hidePlayersBtn.MouseButton1Click:Connect(function() applyHidePlayers(not cfg.hidePlayersEnabled) end) 
-lessVfxBtn.MouseButton1Click:Connect(function() applyLessVFX(not cfg.lessVfxEnabled) end)
+            return teleportToServer(
+                server.id,
+                hopButton,
+                "Hopping...",
+                "Hop Server"
+            )
+        end
+    end
 
-b2.MouseButton1Click:Connect(function()
-	modeExpanded = not modeExpanded
-	brightModeBtn.Visible = modeExpanded
-	offModeBtn.Visible = modeExpanded
-	darkModeBtn.Visible = modeExpanded
-end)
+    -- Fallback: ask Roblox to place the player into another public server.
+    local ok = pcall(function()
+        TeleportService:Teleport(placeId, player)
+    end)
 
-brightModeBtn.MouseButton1Click:Connect(function() applyBright(1) end)
-offModeBtn.MouseButton1Click:Connect(function() applyBright(2) end)
-darkModeBtn.MouseButton1Click:Connect(function() applyBright(3) end)
+    if not ok then
+        teleportBusy = false
+        resetTeleportButton(hopButton, "Hop Server")
+        return false
+    end
 
-plusBtn.MouseButton1Click:Connect(function()
-	cfg.effectLevel = math.min(cfg.effectLevel + 1, 10)
-	saveCfg()
-	updateEffectText()
-end)
-minusBtn.MouseButton1Click:Connect(function()
-	cfg.effectLevel = math.max(cfg.effectLevel - 1, 1)
-	saveCfg()
-	updateEffectText()
-end)
+    setTeleportButton(hopButton, "Hopping...", true)
+    return true
+end
 
--- ─── HỆ THỐNG AN TOÀN KHI KHỞI CHẠY (INIT) ──────────────────────────────────
-task.spawn(function()
-	if plr and not plr.Character then
-		plr.CharacterAdded:Wait()
-	end
-	task.wait(0.6)
+local function hopLessPlayers()
+    local placeId = game.PlaceId
+    local currentJobId = game.JobId
 
-	applyBoostFPS(cfg.boostEnabled)
-	applyRemoveTerrain(cfg.terrainEnabled)
-	applyHidePlayers(cfg.hidePlayersEnabled) 
-	applyLessVFX(cfg.lessVfxEnabled)
-	applyBright(cfg.modeIndex)
-	updateModeHighlight()
-end)
+    local servers = getPublicServers(placeId, "Asc", 6)
 
--- FPS/Ping loop
-local fps, last, frames = 0, tick(), 0
-RS.RenderStepped:Connect(function()
-	frames += 1
-	local now = tick()
-	if now - last >= 0.25 then
-		fps = math.floor(frames / (now - last))
-		frames = 0
-		last = now
-		local ping = 0
-		pcall(function()
-			local pingStr = Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
-			local num = pingStr:match("(%d+%.?%d*)")
-			ping = num and math.floor(tonumber(num)) or 0
-		end)
-		l.Text = ("FPS: %d | Ping: %d ms"):format(fps, ping)
-	end
-	l.TextColor3 = Color3.fromHSV((tick() % 5) / 5, 1, 1)
+    local bestServerId = nil
+    local lowestPlayers = math.huge
+
+    for _, server in ipairs(servers) do
+        local playing = tonumber(server.playing)
+        local maxPlayers = tonumber(server.maxPlayers)
+
+        if server.id ~= currentJobId
+            and playing
+            and maxPlayers
+            and playing > 0
+            and playing < maxPlayers
+            and playing < lowestPlayers then
+
+            lowestPlayers = playing
+            bestServerId = server.id
+        end
+    end
+
+    if bestServerId then
+        return teleportToServer(
+            bestServerId,
+            hopLessButton,
+            "Searching...",
+            "Hop Server (Less)"
+        )
+    end
+
+    -- Fallback.
+    local ok = pcall(function()
+        TeleportService:Teleport(placeId, player)
+    end)
+
+    if not ok then
+        teleportBusy = false
+        resetTeleportButton(hopLessButton, "Hop Server (Less)")
+        return false
+    end
+
+    setTeleportButton(hopLessButton, "Searching...", true)
+    return true
+end
+
+local function rejoinServer()
+    if teleportBusy then
+        return
+    end
+
+    teleportBusy = true
+    setTeleportButton(rejoinButton, "Rejoining...", true)
+
+    local ok = pcall(function()
+        if #Players:GetPlayers() <= 1 then
+            TeleportService:Teleport(game.PlaceId, player)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, player)
+        end
+    end)
+
+    if not ok then
+        teleportBusy = false
+        resetTeleportButton(rejoinButton, "Rejoin Server")
+    end
+end
+
+--// Button logic
+connect(reduceLagButton.MouseButton1Click, function()
+    lagExpanded = not lagExpanded
+    refreshMenus()
 end)
 
--- Rainbow Stroke Loop
-task.spawn(function()
-	while gui and gui.Parent do
-		local rainbow = Color3.fromHSV((tick() % 5) / 5, 1, 1)
-		for i = #rainbowObjects, 1, -1 do
-			local stroke = rainbowObjects[i]
-			if stroke and stroke.Parent then
-				stroke.Color = rainbow
-			else
-				table.remove(rainbowObjects, i)
-			end
-		end
-		task.wait(0.03)
-	end
+connect(modeButton.MouseButton1Click, function()
+    modeExpanded = not modeExpanded
+    refreshMenus()
 end)
+
+connect(serverMainButton.MouseButton1Click, function()
+    serverExpanded = not serverExpanded
+    refreshMenus()
+end)
+
+connect(boostButton.MouseButton1Click, function()
+    applyBoostFPS(not config.boostEnabled)
+end)
+
+connect(terrainButton.MouseButton1Click, function()
+    applyRemoveTerrain(not config.terrainEnabled)
+end)
+
+connect(hidePlayersButton.MouseButton1Click, function()
+    applyHidePlayers(not config.hidePlayersEnabled)
+end)
+
+connect(lessVfxButton.MouseButton1Click, function()
+    applyLessVFX(not config.lessVfxEnabled)
+end)
+
+connect(brightModeButton.MouseButton1Click, function()
+    setLightingMode(1)
+end)
+
+connect(offModeButton.MouseButton1Click, function()
+    setLightingMode(2)
+end)
+
+connect(darkModeButton.MouseButton1Click, function()
+    setLightingMode(3)
+end)
+
+connect(plusButton.MouseButton1Click, function()
+    config.effectLevel = math.min(config.effectLevel + 1, 10)
+    saveConfig()
+    applyLightingMode()
+end)
+
+connect(minusButton.MouseButton1Click, function()
+    config.effectLevel = math.max(config.effectLevel - 1, 1)
+    saveConfig()
+    applyLightingMode()
+end)
+
+connect(fpsToggleButton.MouseButton1Click, function()
+    config.fpsPingEnabled = not config.fpsPingEnabled
+    saveConfig()
+
+    fpsLabel.Visible = config.fpsPingEnabled
+    fpsToggleButton.Text =
+        "Show FPS/Ping: " .. (config.fpsPingEnabled and "ON" or "OFF")
+
+    setButtonState(fpsToggleButton, config.fpsPingEnabled)
+end)
+
+connect(hopButton.MouseButton1Click, function()
+    if teleportBusy then
+        return
+    end
+
+    setTeleportButton(hopButton, "Loading...", true)
+
+    task.spawn(function()
+        local success = hopNormal()
+
+        if not success and hopButton.Parent then
+            resetTeleportButton(hopButton, "Hop Server")
+        end
+    end)
+end)
+
+connect(hopLessButton.MouseButton1Click, function()
+    if teleportBusy then
+        return
+    end
+
+    setTeleportButton(hopLessButton, "Searching...", true)
+
+    task.spawn(function()
+        local success = hopLessPlayers()
+
+        if not success and hopLessButton.Parent then
+            resetTeleportButton(hopLessButton, "Hop Server (Less)")
+        end
+    end)
+end)
+
+connect(rejoinButton.MouseButton1Click, function()
+    rejoinServer()
+end)
+
+--// Left Alt = show / hide UI
+connect(UserInputService.InputBegan, function(input, gameProcessed)
+    if gameProcessed then
+        return
+    end
+
+    if input.KeyCode == Enum.KeyCode.LeftAlt then
+        uiVisible = not uiVisible
+        refreshMenus()
+    end
+end)
+
+--// FPS + Ping monitor
+local fpsAccumulator = 0
+local fpsFrames = 0
+local fpsUpdateTimer = 0
+local rainbowTimer = 0
+
+connect(RunService.RenderStepped, function(deltaTime)
+    fpsFrames += 1
+    fpsAccumulator += deltaTime
+    fpsUpdateTimer += deltaTime
+    rainbowTimer += deltaTime
+
+    if fpsUpdateTimer >= 0.25 then
+        local fps = 0
+
+        if fpsAccumulator > 0 then
+            fps = math.floor(fpsFrames / fpsAccumulator + 0.5)
+        end
+
+        fpsFrames = 0
+        fpsAccumulator = 0
+        fpsUpdateTimer = 0
+
+        if config.fpsPingEnabled and fpsLabel.Parent then
+            local ping = 0
+
+            pcall(function()
+                local networkStats = Stats:FindFirstChild("Network")
+                local serverStats = networkStats
+                    and networkStats:FindFirstChild("ServerStatsItem")
+
+                local pingStat = serverStats
+                    and serverStats:FindFirstChild("Data Ping")
+
+                if pingStat then
+                    local valueString = pingStat:GetValueString()
+                    local number = tonumber(valueString:match("(%d+%.?%d*)"))
+                    ping = number and math.floor(number + 0.5) or 0
+                end
+            end)
+
+            fpsLabel.Text = ("FPS: %d | Ping: %d ms"):format(fps, ping)
+        end
+    end
+
+    if rainbowTimer >= 0.05 then
+        rainbowTimer = 0
+
+        local hue = (os.clock() % 5) / 5
+        local rainbowColor = Color3.fromHSV(hue, 1, 1)
+
+        for index = #rainbowStrokes, 1, -1 do
+            local stroke = rainbowStrokes[index]
+
+            if stroke and stroke.Parent then
+                stroke.Color = rainbowColor
+            else
+                table.remove(rainbowStrokes, index)
+            end
+        end
+
+        if fpsLabel.Parent then
+            fpsLabel.TextColor3 = rainbowColor
+        end
+    end
+end)
+
+--// Initial UI state
+updateModeUI()
+setButtonState(boostButton, config.boostEnabled)
+setButtonState(terrainButton, config.terrainEnabled)
+setButtonState(hidePlayersButton, config.hidePlayersEnabled)
+setButtonState(
+    lessVfxButton,
+    config.lessVfxEnabled,
+    Color3.fromRGB(80, 20, 20)
+)
+setButtonState(fpsToggleButton, config.fpsPingEnabled)
+refreshMenus()
+
+--// Apply saved settings once after the UI is ready.
+task.defer(function()
+    if config.boostEnabled then
+        applyBoostFPS(true)
+    end
+
+    if config.terrainEnabled then
+        applyRemoveTerrain(true)
+    end
+
+    if config.hidePlayersEnabled then
+        applyHidePlayers(true)
+    end
+
+    if config.lessVfxEnabled then
+        applyLessVFX(true)
+    end
+
+    applyLightingMode()
+end)
+
+--// Global cleanup for safe reruns / removal.
+local cleanedUp = false
+
+ENV.BlockVNHubCleanup = function()
+    if cleanedUp then
+        return
+    end
+
+    cleanedUp = true
+
+    -- Stop callbacks first.
+    disconnectAll()
+
+    -- Restore modified instances.
+    restoreStorage(savedBoost)
+    restoreStorage(savedTerrain)
+    restoreStorage(savedVfx)
+    restoreStorage(savedHiddenPlayers)
+
+    if next(savedTerrainColors) ~= nil then
+        local terrain = workspace:FindFirstChildOfClass("Terrain")
+        if terrain then
+            restoreTerrainColors(terrain)
+        end
+    end
+
+    -- Restore Lighting.
+    pcall(function()
+        Lighting.Brightness = originalLighting.Brightness
+        Lighting.ClockTime = originalLighting.ClockTime
+        Lighting.FogEnd = originalLighting.FogEnd
+        Lighting.GlobalShadows = originalLighting.GlobalShadows
+        Lighting.Ambient = originalLighting.Ambient
+        Lighting.OutdoorAmbient = originalLighting.OutdoorAmbient
+        Lighting.ExposureCompensation = originalLighting.ExposureCompensation
+    end)
+
+    table.clear(otherCharacterSet)
+    table.clear(hidePlayerConnections)
+    table.clear(rainbowStrokes)
+
+    if gui then
+        pcall(function()
+            gui:Destroy()
+        end)
+    end
+
+    saveQueued = false
+
+    -- Keep the cleanup entry reusable for a future execution.
+    ENV.BlockVNHubCleanup = nil
+end
